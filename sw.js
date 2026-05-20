@@ -1,4 +1,4 @@
-const CACHE = 'sobasay-menu-v1.2.0';
+const CACHE = 'sobasay-menu-v1.0.0';
 const ASSETS = [
   './index.html',
   './sobasay_menu_editor.html',

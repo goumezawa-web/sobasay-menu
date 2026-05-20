@@ -69,8 +69,9 @@ body {
   --accent: #1a1a1a; --accent-lt: #999; --rule: #ccc;
 }
 .page {
-  width: 182mm; min-height: 257mm; background: #fff;
+  width: 210mm; min-height: 297mm; background: #fff;
   position: relative; box-shadow: 2px 4px 20px rgba(0,0,0,0.12);
+  margin: 0 0 64px;
   font-family: 'Hiragino Mincho ProN','Yu Mincho',serif;
 }
 .corner { position: absolute; width: 12mm; height: 12mm; }
@@ -80,7 +81,7 @@ body {
 .corner.br { bottom:5mm; right:5mm; border-bottom:1px solid var(--rule); border-right:1px solid var(--rule); }
 .inner {
   padding: 8mm 11mm 9mm;
-  display: flex; flex-direction: column; min-height: 257mm;
+  display: flex; flex-direction: column; min-height: 297mm;
 }
 
 .logo-mark {
@@ -180,29 +181,11 @@ body {
 .logo-word { flex-shrink: 0; margin-left: 6mm; }
 .logo-word img { height: 6mm; width: auto; mix-blend-mode: multiply; }
 
-.stage {
-  display: flex; justify-content: center;
-  padding: 24px 16px 40px;
-  overflow: hidden;
-}
-.scaler {
-  transform-origin: top center;
-  transform: scale(var(--scale, 1));
-  flex-shrink: 0;
-}
-
-@page { size: 182mm 257mm; margin: 0; }
-
 @media print {
   .tabbar { display: none; }
   body { background: none; }
   .page { box-shadow: none; margin: 0; }
-  .stage { padding: 0 !important; }
-  .scaler { transform: none !important; }
   .insert-zone, .spacer-del { display: none !important; }
-}
-@media (hover: none), (pointer: coarse) {
-  .logo-text, .item-name, .item-price, .item-note, .footer-note { font-size: 16px; }
 }
 </style>
 </head>
@@ -292,8 +275,6 @@ body {
   </div>
 </div>
 
-<div class="stage">
-<div class="scaler">
 <div class="page">
   <div class="corner tl"></div><div class="corner tr"></div>
   <div class="corner bl"></div><div class="corner br"></div>
@@ -544,8 +525,6 @@ body {
     </div>
   </div>
 </div>
-</div>
-</div>
 
 <script>
 document.querySelectorAll('.tab').forEach(tab => {
@@ -669,7 +648,7 @@ function syncList(sid) {
 }
 
 // ── Dynamic page size ──────────────────────────────────────────────
-const _pageW = 182, _pageH = 257;
+let _pageW = 210, _pageH = 297;
 
 function _applyPageSize(w, h) {
   _pageW = w; _pageH = h;
@@ -680,27 +659,9 @@ function _applyPageSize(w, h) {
   st.textContent = '@page { size: ' + w + 'mm ' + h + 'mm; margin: 0; }';
 }
 
-
-function _updateScale() {
-  const scaler  = document.querySelector('.scaler');
-  const tabbar  = document.querySelector('.tabbar');
-  const tbH = tabbar ? tabbar.getBoundingClientRect().height : 50;
-  const pad = 32;
-  const PX  = 3.7795;
-  const wMax = (window.innerWidth  - pad) / (_pageW * PX);
-  const hMax = (window.innerHeight - tbH - 40) / (_pageH * PX);
-  const cap  = window.innerWidth < 640 ? 1.0 : 0.95;
-  const s    = Math.max(0.1, Math.min(wMax, hMax, cap));
-  scaler.style.setProperty('--scale', s.toFixed(3));
-  scaler.style.marginBottom = -(_pageH * PX * (1 - s)) + 'px';
-  scaler.style.marginLeft   = -(_pageW * PX * (1 - s) / 2) + 'px';
-  scaler.style.marginRight  = -(_pageW * PX * (1 - s) / 2) + 'px';
-  document.querySelector('.stage').style.minHeight = (_pageH * PX * s + 40) + 'px';
-}
-window.addEventListener('resize', _updateScale);
-window.addEventListener('orientationchange', _updateScale);
-setTimeout(_updateScale, 100);
-setTimeout(_updateScale, 500);
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'setPaperSize') _applyPageSize(e.data.w, e.data.h);
+});
 
 // ── localStorage save / restore ────────────────────────────────────
 const _LS = 'sobasay_vertical';
@@ -747,6 +708,8 @@ function _restore() {
     const raw = localStorage.getItem(_LS);
     if (!raw) return;
     const data = JSON.parse(raw);
+
+    if (data.pageW && data.pageH) _applyPageSize(data.pageW, data.pageH);
 
     const colL = document.querySelector('.col-left');
     const colR = document.querySelector('.col-right');
