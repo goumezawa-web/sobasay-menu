@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+  <meta name="theme-color" content="#1B3A5C">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="sobasay menu">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <title>sobasay menu v1.0.0</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: #1B3A5C;
+      font-family: 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+      color: #fff;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      height: 100dvh;
+    }
+
+    /* ── Tab views ─────────────────────────────────────────────────── */
+    .views {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .view {
+      position: absolute;
+      inset: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .view.active {
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* ── Settings panel ─────────────────────────────────────────────── */
+    .settings {
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 28px 20px 20px;
+      background: #1B3A5C;
+    }
+
+    .settings h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      letter-spacing: 0.04em;
+    }
+
+    .section {
+      background: rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.6);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    /* Paper size grid */
+    .paper-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .paper-btn {
+      background: rgba(255,255,255,0.08);
+      border: 2px solid transparent;
+      border-radius: 10px;
+      padding: 14px 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+      color: #fff;
+    }
+    .paper-btn:hover { background: rgba(255,255,255,0.18); }
+    .paper-btn.sel {
+      border-color: #fff;
+      background: rgba(255,255,255,0.2);
+    }
+    .paper-btn .pname {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .paper-btn .pdim {
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 5px;
+    }
+
+    /* Drive / Restore buttons */
+    .action-btn {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 15px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    .action-btn:active { opacity: 0.8; }
+
+    .btn-drive {
+      background: #3B82F6;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .btn-restore {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .status-msg {
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      margin-top: 10px;
+      min-height: 1.4em;
+    }
+
+    .info-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.8;
+    }
+
+    /* ── Bottom Navigation ──────────────────────────────────────────── */
+    .bottom-nav {
+      display: flex;
+      background: #0D2137;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      flex-shrink: 0;
+    }
+
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 10px 4px 8px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      transition: color 0.15s;
+      font-family: inherit;
+      position: relative;
+    }
+    .nav-btn.active { color: #fff; }
+    .nav-btn.active::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 20%; right: 20%;
+      height: 2px;
+      background: #fff;
+      border-radius: 0 0 2px 2px;
+    }
+
+    .nav-icon { font-size: 22px; line-height: 1; }
+    .nav-label { font-size: 10px; letter-spacing: 0.02em; white-space: nowrap; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Tab content ────────────────────────────────────────────── -->
+  <div class="views">
+
+    <!-- 横組みエディタ -->
+    <div class="view active" id="view-h">
+      <iframe id="iframe-h" src="sobasay_menu_editor.html" title="横組みメニュー編集"></iframe>
+    </div>
+
+    <!-- 縦組みエディタ -->
+    <div class="view" id="view-v">
+      <iframe id="iframe-v" src="sobasay_menu_vertical.html" title="縦組みメニュー編集"></iframe>
+    </div>
+
+    <!-- 設定 -->
+    <div class="view" id="view-s">
+      <div class="settings">
+        <h2>⚙ 設定</h2>
+
+        <!-- Paper size -->
+        <div class="section">
+          <div class="section-title">用紙サイズ</div>
+          <div class="paper-grid">
+            <button class="paper-btn" data-size="B5" data-w="182" data-h="257">
+              <div class="pname">B5</div>
+              <div class="pdim">182 × 257 mm</div>
+            </button>
+            <button class="paper-btn" data-size="A4" data-w="210" data-h="297">
+              <div class="pname">A4</div>
+              <div class="pdim">210 × 297 mm</div>
+            </button>
+            <button class="paper-btn sel" data-size="A3" data-w="297" data-h="420">
+              <div class="pname">A3</div>
+              <div class="pdim">297 × 420 mm</div>
+            </button>
+            <button class="paper-btn" data-size="B2" data-w="515" data-h="728">
+              <div class="pname">B2</div>
+              <div class="pdim">515 × 728 mm</div>
+            </button>
+            <button class="paper-btn" data-size="A1" data-w="594" data-h="841">
+              <div class="pname">A1</div>
+              <div class="pdim">594 × 841 mm</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Drive save -->
+        <div class="section">
+          <div class="section-title">データ保存</div>
+          <p class="info-text" style="margin-bottom:14px;">
+            全データをJSONファイルに書き出します。<br>
+            Google Driveのフォルダに保存してバックアップできます。
+          </p>
+          <button class="action-btn btn-drive" id="btn-save">
+            <span>💾</span> Driveに保存
+          </button>
+          <button class="action-btn btn-restore" id="btn-restore">
+            <span>📂</span> ファイルから読み込む
+          </button>
+          <input type="file" id="restore-input" accept=".json" style="display:none">
+          <p class="status-msg" id="status-msg"></p>
+        </div>
+
+        <!-- About -->
+        <div class="section">
+          <div class="section-title">このアプリについて</div>
+          <p class="info-text">
+            編集内容は自動的に端末に保存されます。<br>
+            ページを閉じても前回の内容が残ります。<br><br>
+            ホーム画面に追加するとPWAとして<br>
+            オフラインでも使用できます。
+          </p>
+          <p class="info-text" style="margin-top:12px; color:rgba(255,255,255,0.35);">v1.0.0</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /views -->
+
+  <!-- ── Bottom Navigation ────────────────────────────────────── -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="h">
+      <span class="nav-icon">📷</span>
+      <span class="nav-label">横組み編集</span>
+    </button>
+    <button class="nav-btn" data-view="v">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">縦組み編集</span>
+    </button>
+    <button class="nav-btn" data-view="s">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">設定</span>
+    </button>
+  </nav>
+
+</div><!-- /app -->
+
+<script>
+'use strict';
+
+// ── Tab navigation ─────────────────────────────────────────────────
+const navBtns = document.querySelectorAll('.nav-btn');
+const views   = document.querySelectorAll('.view');
+
+navBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.view;
+    navBtns.forEach(b => b.classList.remove('active'));
+    views.forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + id).classList.add('active');
+  });
+});
+
+// ── Paper size ──────────────────────────────────────────────────────
+const PAPER_KEY = 'sobasay_paper_size';
+const paperBtns = document.querySelectorAll('.paper-btn');
+let paperSize   = JSON.parse(localStorage.getItem(PAPER_KEY) || 'null') || { size:'A3', w:297, h:420 };
+
+function applyPaperSize(size, w, h) {
+  paperSize = { size, w, h };
+  localStorage.setItem(PAPER_KEY, JSON.stringify(paperSize));
+
+  paperBtns.forEach(b => b.classList.toggle('sel', b.dataset.size === size));
+
+  const msg = { type: 'setPaperSize', size, w, h };
+  ['iframe-h', 'iframe-v'].forEach(id => {
+    const fr = document.getElementById(id);
+    try { fr.contentWindow.postMessage(msg, '*'); } catch(e) {}
+  });
+}
+
+paperBtns.forEach(b => {
+  if (b.dataset.size === paperSize.size) b.classList.add('sel');
+  else b.classList.remove('sel');
+
+  b.addEventListener('click', () =>
+    applyPaperSize(b.dataset.size, Number(b.dataset.w), Number(b.dataset.h))
+  );
+});
+
+// Send paper size when each iframe loads
+function onFrameLoad(id) {
+  const fr = document.getElementById(id);
+  fr.addEventListener('load', () => {
+    try {
+      fr.contentWindow.postMessage({ type: 'setPaperSize', ...paperSize }, '*');
+    } catch(e) {}
+  });
+}
+onFrameLoad('iframe-h');
+onFrameLoad('iframe-v');
+
+// ── Drive save ──────────────────────────────────────────────────────
+function showStatus(msg) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 3500);
+}
+
+document.getElementById('btn-save').addEventListener('click', async () => {
+  const hRaw = localStorage.getItem('sobasay_horizontal');
+  const vRaw = localStorage.getItem('sobasay_vertical');
+  const bundle = {
+    version: 1,
+    timestamp: new Date().toISOString(),
+    paperSize: paperSize,
+    horizontal: hRaw ? JSON.parse(hRaw) : null,
+    vertical:   vRaw ? JSON.parse(vRaw) : null
+  };
+
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+  const fname = 'sobasay-menu-' + new Date().toISOString().slice(0, 10) + '.json';
+
+  if (window.showSaveFilePicker) {
+    try {
+      const fh = await showSaveFilePicker({
+        suggestedName: fname,
+        types: [{ description: 'sobasay data', accept: { 'application/json': ['.json'] } }]
+      });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+      showStatus('保存しました ✓');
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  // Fallback download
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: fname });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  showStatus('ダウンロードしました ✓');
+});
+
+// ── Restore from file ───────────────────────────────────────────────
+document.getElementById('btn-restore').addEventListener('click', () => {
+  document.getElementById('restore-input').click();
+});
+
+document.getElementById('restore-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.horizontal) localStorage.setItem('sobasay_horizontal', JSON.stringify(data.horizontal));
+      if (data.vertical)   localStorage.setItem('sobasay_vertical',   JSON.stringify(data.vertical));
+      if (data.paperSize)  localStorage.setItem(PAPER_KEY, JSON.stringify(data.paperSize));
+      showStatus('読み込みました。ページをリロードしてください ✓');
+      if (confirm('データを読み込みました。ページをリロードしますか？')) location.reload();
+    } catch {
+      showStatus('ファイルを読み込めませんでした ✗');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ── Service Worker ──────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

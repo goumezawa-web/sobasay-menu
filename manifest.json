@@ -1,0 +1,24 @@
+{
+  "name": "sobasay menu",
+  "short_name": "menu",
+  "description": "sobasay メニュー編集アプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1B3A5C",
+  "theme_color": "#1B3A5C",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
