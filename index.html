@@ -224,30 +224,21 @@
       <div class="settings">
         <h2>⚙ 設定</h2>
 
-        <!-- Paper size -->
+        <!-- Paper size (fixed per template) -->
         <div class="section">
           <div class="section-title">用紙サイズ</div>
-          <div class="paper-grid">
-            <button class="paper-btn" data-size="B5" data-w="182" data-h="257">
-              <div class="pname">B5</div>
-              <div class="pdim">182 × 257 mm</div>
-            </button>
-            <button class="paper-btn" data-size="A4" data-w="210" data-h="297">
-              <div class="pname">A4</div>
-              <div class="pdim">210 × 297 mm</div>
-            </button>
-            <button class="paper-btn sel" data-size="A3" data-w="297" data-h="420">
-              <div class="pname">A3</div>
-              <div class="pdim">297 × 420 mm</div>
-            </button>
-            <button class="paper-btn" data-size="B2" data-w="515" data-h="728">
-              <div class="pname">B2</div>
-              <div class="pdim">515 × 728 mm</div>
-            </button>
-            <button class="paper-btn" data-size="A1" data-w="594" data-h="841">
-              <div class="pname">A1</div>
-              <div class="pdim">594 × 841 mm</div>
-            </button>
+          <p class="info-text" style="margin-bottom:10px;">各テンプレートで固定されています。</p>
+          <div style="display:flex; gap:10px;">
+            <div style="flex:1; background:rgba(255,255,255,0.08); border-radius:10px; padding:14px 10px; text-align:center;">
+              <div style="font-size:18px; font-weight:700; line-height:1;">A1横</div>
+              <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-top:5px;">841 × 594 mm</div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.4); margin-top:3px;">横組み編集</div>
+            </div>
+            <div style="flex:1; background:rgba(255,255,255,0.08); border-radius:10px; padding:14px 10px; text-align:center;">
+              <div style="font-size:18px; font-weight:700; line-height:1;">B5縦</div>
+              <div style="font-size:11px; color:rgba(255,255,255,0.55); margin-top:5px;">182 × 257 mm</div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.4); margin-top:3px;">縦組み編集</div>
+            </div>
           </div>
         </div>
 
@@ -318,45 +309,6 @@ navBtns.forEach(btn => {
     document.getElementById('view-' + id).classList.add('active');
   });
 });
-
-// ── Paper size ──────────────────────────────────────────────────────
-const PAPER_KEY = 'sobasay_paper_size';
-const paperBtns = document.querySelectorAll('.paper-btn');
-let paperSize   = JSON.parse(localStorage.getItem(PAPER_KEY) || 'null') || { size:'A3', w:297, h:420 };
-
-function applyPaperSize(size, w, h) {
-  paperSize = { size, w, h };
-  localStorage.setItem(PAPER_KEY, JSON.stringify(paperSize));
-
-  paperBtns.forEach(b => b.classList.toggle('sel', b.dataset.size === size));
-
-  const msg = { type: 'setPaperSize', size, w, h };
-  ['iframe-h', 'iframe-v'].forEach(id => {
-    const fr = document.getElementById(id);
-    try { fr.contentWindow.postMessage(msg, '*'); } catch(e) {}
-  });
-}
-
-paperBtns.forEach(b => {
-  if (b.dataset.size === paperSize.size) b.classList.add('sel');
-  else b.classList.remove('sel');
-
-  b.addEventListener('click', () =>
-    applyPaperSize(b.dataset.size, Number(b.dataset.w), Number(b.dataset.h))
-  );
-});
-
-// Send paper size when each iframe loads
-function onFrameLoad(id) {
-  const fr = document.getElementById(id);
-  fr.addEventListener('load', () => {
-    try {
-      fr.contentWindow.postMessage({ type: 'setPaperSize', ...paperSize }, '*');
-    } catch(e) {}
-  });
-}
-onFrameLoad('iframe-h');
-onFrameLoad('iframe-v');
 
 // ── Drive save ──────────────────────────────────────────────────────
 function showStatus(msg) {

@@ -48,15 +48,16 @@
   .stage {
     display: flex; justify-content: center;
     padding: 24px 16px 60px;
+    overflow: hidden;
   }
   .scaler {
     transform-origin: top center;
     transform: scale(var(--scale, 0.55));
   }
 
-  /* The A3 page */
+  /* The A1 landscape page */
   .page {
-    width: 297mm; height: 420mm;
+    width: 841mm; height: 594mm;
     background: #fff;
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
     position: relative;
@@ -186,6 +187,7 @@
   }
   @media (hover: none), (pointer: coarse) {
     .desc { font-size: 16px; }
+    .name, .price { font-size: 16px; }
   }
 
   /* contenteditable placeholder */
@@ -200,7 +202,7 @@
   .mark { width: 9mm; height: 9mm; object-fit: contain; opacity: .85; margin-top: 3mm; }
 
   /* PRINT */
-  @page { size: A3 portrait; margin: 0; }
+  @page { size: 841mm 594mm; margin: 0; }
   @media print {
     html, body { background: #fff !important; }
     .toolbar, .stage > .meta { display: none !important; }
@@ -216,7 +218,7 @@
 <body>
 
 <div class="toolbar">
-  <h1>sobasay menu — A3 エディタ</h1>
+  <h1>sobasay menu — A1横 エディタ</h1>
   <button onclick="window.print()">PDFで保存 / 印刷</button>
   <button class="ghost" onclick="resetAll()">リセット</button>
   <div class="spacer"></div>
@@ -488,15 +490,17 @@
     const toolbar = document.querySelector('.toolbar');
     const tbH = toolbar ? toolbar.getBoundingClientRect().height : 80;
     const pad = window.innerWidth < 640 ? 16 : 60;
-    const wMax = (window.innerWidth - pad) / (297 * 3.7795);
-    const hMax = (window.innerHeight - tbH - 40) / (420 * 3.7795);
-    // Prefer width-fit on mobile so the page is fully readable
+    const PX = 3.7795;
+    const W = 841, H = 594;
+    const wMax = (window.innerWidth - pad) / (W * PX);
+    const hMax = (window.innerHeight - tbH - 40) / (H * PX);
     const cap = window.innerWidth < 640 ? 1.0 : 0.85;
-    const s = Math.min(wMax, hMax, cap);
-    const finalS = Math.max(0.18, s);
+    const finalS = Math.max(0.08, Math.min(wMax, hMax, cap));
     stage.style.setProperty('--scale', finalS.toFixed(3));
-    const sh = 420 * 3.7795 * finalS + 60;
-    document.querySelector('.stage').style.minHeight = sh + 'px';
+    stage.style.marginBottom = -(H * PX * (1 - finalS)) + 'px';
+    stage.style.marginLeft   = -(W * PX * (1 - finalS) / 2) + 'px';
+    stage.style.marginRight  = -(W * PX * (1 - finalS) / 2) + 'px';
+    document.querySelector('.stage').style.minHeight = (H * PX * finalS + 60) + 'px';
   }
   window.addEventListener('resize', _updateScale);
   window.addEventListener('orientationchange', _updateScale);
@@ -506,10 +510,10 @@
   setTimeout(_updateScale, 500);
 
   // ── Dynamic page size ───────────────────────────────────────────────
-  let _pageW = 297, _pageH = 420;
+  const _pageW = 841, _pageH = 594;
 
   function _updateScale() {
-    const stage   = document.querySelector('.scaler');
+    const scaler  = document.querySelector('.scaler');
     const toolbar = document.querySelector('.toolbar');
     const tbH = toolbar ? toolbar.getBoundingClientRect().height : 80;
     const pad = window.innerWidth < 640 ? 16 : 60;
@@ -517,8 +521,11 @@
     const wMax = (window.innerWidth  - pad)    / (_pageW * PX);
     const hMax = (window.innerHeight - tbH - 40) / (_pageH * PX);
     const cap  = window.innerWidth < 640 ? 1.0 : 0.85;
-    const s    = Math.max(0.18, Math.min(wMax, hMax, cap));
-    stage.style.setProperty('--scale', s.toFixed(3));
+    const s    = Math.max(0.08, Math.min(wMax, hMax, cap));
+    scaler.style.setProperty('--scale', s.toFixed(3));
+    scaler.style.marginBottom = -(_pageH * PX * (1 - s)) + 'px';
+    scaler.style.marginLeft   = -(_pageW * PX * (1 - s) / 2) + 'px';
+    scaler.style.marginRight  = -(_pageW * PX * (1 - s) / 2) + 'px';
     document.querySelector('.stage').style.minHeight = (_pageH * PX * s + 60) + 'px';
   }
   // Override resize listeners so dynamic dimensions are used
@@ -536,9 +543,6 @@
     _updateScale();
   }
 
-  window.addEventListener('message', e => {
-    if (e.data && e.data.type === 'setPaperSize') _applyPageSize(e.data.w, e.data.h);
-  });
 
   // ── localStorage save / restore ────────────────────────────────────
   const _LS = 'sobasay_horizontal';
@@ -608,8 +612,6 @@
       const raw = localStorage.getItem(_LS);
       if (!raw) return;
       const data = JSON.parse(raw);
-
-      if (data.pageW && data.pageH) _applyPageSize(data.pageW, data.pageH);
 
       if (data.cells) {
         document.querySelectorAll('.cell').forEach((cell, i) => {
