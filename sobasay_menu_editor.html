@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#111111" />
-<title>sobasay menu — A3 editor</title>
+<title>sobasay menu — B5 editor</title>
 <style>
   :root {
     --ink: #1A1A1A;
@@ -44,7 +44,7 @@
   .toolbar .spacer { flex: 1; }
   .toolbar .hint { font-size: 12px; color: #aaa; }
 
-  /* Stage that scales the A3 page on screen */
+  /* Stage that scales the B5 page on screen */
   .stage {
     display: flex; justify-content: center;
     padding: 24px 16px 60px;
@@ -54,9 +54,9 @@
     transform: scale(var(--scale, 0.55));
   }
 
-  /* The A3 page */
+  /* The B5 page */
   .page {
-    width: 297mm; height: 420mm;
+    width: 182mm; height: 257mm;
     background: #fff;
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
     position: relative;
@@ -97,10 +97,12 @@
   }
   .cell {
     display: flex; flex-direction: column;
+    min-height: 0;
   }
   .photo {
     position: relative;
     aspect-ratio: 4 / 3;
+    min-height: 0;
     background: var(--photo-bg);
     border: 0.5px solid var(--photo-bd);
     overflow: hidden;
@@ -200,14 +202,33 @@
   .mark { width: 9mm; height: 9mm; object-fit: contain; opacity: .85; margin-top: 3mm; }
 
   /* PRINT */
-  @page { size: A3 portrait; margin: 0; }
+  @page { size: 182mm 257mm; margin: 0; }
   @media print {
-    html, body { background: #fff !important; }
+    html, body {
+      width: 182mm; height: 257mm;
+      margin: 0; padding: 0;
+      overflow: hidden;
+      background: #fff !important;
+    }
     .toolbar, .stage > .meta { display: none !important; }
-    .stage { padding: 0 !important; }
-    .scaler { transform: none !important; }
-    .page { box-shadow: none !important; }
-    .photo { cursor: default !important; }
+    .stage  { padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+    .scaler { transform: none !important; margin: 0 !important; }
+    .page {
+      box-shadow: none !important;
+      overflow: hidden !important;
+      page-break-after: avoid; break-after: avoid;
+      page-break-inside: avoid;
+    }
+    .grid { min-height: 0 !important; overflow: hidden !important; }
+    .cell { min-height: 0 !important; overflow: hidden !important; }
+    .photo {
+      aspect-ratio: unset !important;
+      flex: 1 1 0 !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+      cursor: default !important;
+    }
+    .desc { flex-shrink: 1 !important; overflow: hidden !important; max-height: 2.5em !important; }
     .photo .pcontrols, .photo .hint-bar { display: none !important; }
     [contenteditable=true]:focus { outline: none !important; }
   }
@@ -216,7 +237,7 @@
 <body>
 
 <div class="toolbar">
-  <h1>sobasay menu — A3 エディタ</h1>
+  <h1>sobasay menu — B5 エディタ</h1>
   <button onclick="window.print()">PDFで保存 / 印刷</button>
   <button class="ghost" onclick="resetAll()">リセット</button>
   <div class="spacer"></div>
@@ -482,63 +503,79 @@
     document.querySelectorAll('[contenteditable=true]').forEach(el => el.textContent = '');
   }
 
-  // Auto-fit screen scale (responsive: mobile or desktop)
-  function fitScale() {
-    const stage = document.querySelector('.scaler');
-    const toolbar = document.querySelector('.toolbar');
-    const tbH = toolbar ? toolbar.getBoundingClientRect().height : 80;
-    const pad = window.innerWidth < 640 ? 16 : 60;
-    const wMax = (window.innerWidth - pad) / (297 * 3.7795);
-    const hMax = (window.innerHeight - tbH - 40) / (420 * 3.7795);
-    // Prefer width-fit on mobile so the page is fully readable
-    const cap = window.innerWidth < 640 ? 1.0 : 0.85;
-    const s = Math.min(wMax, hMax, cap);
-    const finalS = Math.max(0.18, s);
-    stage.style.setProperty('--scale', finalS.toFixed(3));
-    const sh = 420 * 3.7795 * finalS + 60;
-    document.querySelector('.stage').style.minHeight = sh + 'px';
-  }
-  window.addEventListener('resize', _updateScale);
-  window.addEventListener('orientationchange', _updateScale);
-  fitScale();
-  // Re-run after layout settles (mobile address bar etc.)
-  setTimeout(_updateScale, 100);
-  setTimeout(_updateScale, 500);
+  // ── B5 fixed dimensions ─────────────────────────────────────────────
+  const _pageW = 182, _pageH = 257, _PX = 3.7795;
 
-  // ── Dynamic page size ───────────────────────────────────────────────
-  let _pageW = 297, _pageH = 420;
-
+  // Scale B5 page to fit viewport, collapse CSS-transform dead space with negative margins
   function _updateScale() {
-    const stage   = document.querySelector('.scaler');
+    const scaler  = document.querySelector('.scaler');
+    const stage   = document.querySelector('.stage');
     const toolbar = document.querySelector('.toolbar');
     const tbH = toolbar ? toolbar.getBoundingClientRect().height : 80;
     const pad = window.innerWidth < 640 ? 16 : 60;
-    const PX  = 3.7795;
-    const wMax = (window.innerWidth  - pad)    / (_pageW * PX);
-    const hMax = (window.innerHeight - tbH - 40) / (_pageH * PX);
+    const wMax = (window.innerWidth  - pad)      / (_pageW * _PX);
+    const hMax = (window.innerHeight - tbH - 40) / (_pageH * _PX);
     const cap  = window.innerWidth < 640 ? 1.0 : 0.85;
     const s    = Math.max(0.18, Math.min(wMax, hMax, cap));
-    stage.style.setProperty('--scale', s.toFixed(3));
-    document.querySelector('.stage').style.minHeight = (_pageH * PX * s + 60) + 'px';
-  }
-  // Override resize listeners so dynamic dimensions are used
-  window.addEventListener('resize',            _updateScale);
-  window.addEventListener('orientationchange', _updateScale);
-  setTimeout(_updateScale, 600);
-
-  function _applyPageSize(w, h) {
-    _pageW = w; _pageH = h;
-    const p = document.getElementById('page');
-    if (p) { p.style.width = w + 'mm'; p.style.height = h + 'mm'; }
-    let st = document.getElementById('_dynpage');
-    if (!st) { st = document.createElement('style'); st.id = '_dynpage'; document.head.appendChild(st); }
-    st.textContent = '@page { size: ' + w + 'mm ' + h + 'mm; margin: 0; }';
-    _updateScale();
+    const pageHpx = _pageH * _PX;
+    const pageWpx = _pageW * _PX;
+    scaler.style.setProperty('--scale', s.toFixed(3));
+    scaler.style.marginBottom = -(pageHpx * (1 - s)) + 'px';
+    scaler.style.marginLeft   = -(pageWpx * (1 - s) / 2) + 'px';
+    scaler.style.marginRight  = -(pageWpx * (1 - s) / 2) + 'px';
+    stage.style.minHeight = (pageHpx * s + 60) + 'px';
   }
 
-  window.addEventListener('message', e => {
-    if (e.data && e.data.type === 'setPaperSize') _applyPageSize(e.data.w, e.data.h);
-  });
+  // Make all 9 cells visible within B5 on screen (no overflow:hidden hiding)
+  function _autoFitGrid() {
+    const page = document.getElementById('page');
+    const grid = document.querySelector('.grid');
+    if (!page || !grid) return;
+
+    grid.style.gridTemplateRows = '';
+    document.querySelectorAll('.photo').forEach(p => { p.style.height = ''; });
+    void page.offsetHeight;
+
+    if (page.scrollHeight <= page.offsetHeight + 1) return;
+
+    const pageCS  = getComputedStyle(page);
+    const innerH  = page.offsetHeight
+                  - parseFloat(pageCS.paddingTop)
+                  - parseFloat(pageCS.paddingBottom);
+
+    // Sum all .hair elements: offsetHeight + top/bottom margins (some carry margin-top inline)
+    let hairH = 0;
+    page.querySelectorAll('.hair').forEach(h => {
+      const hCS = getComputedStyle(h);
+      hairH += h.offsetHeight + parseFloat(hCS.marginTop) + parseFloat(hCS.marginBottom);
+    });
+    const headerH = page.querySelector('.header')?.offsetHeight || 0;
+    const footerH = page.querySelector('.footer')?.offsetHeight || 0;
+    const gridCS  = getComputedStyle(grid);
+    const gridPT  = parseFloat(gridCS.paddingTop) || 0;
+    const rowGap  = parseFloat(gridCS.rowGap)     || 0;
+
+    // 4px buffer absorbs sub-pixel rounding across browsers
+    const gridMaxH = innerH - hairH - headerH - footerH - gridPT - 4;
+    if (gridMaxH <= 0) return;
+
+    const rowH = Math.floor((gridMaxH - rowGap * 2) / 3);
+
+    // Photo: natural 4:3 of cell width, capped at 65% of row to keep text visible
+    const sampleCell = grid.querySelector('.cell');
+    const cellW      = sampleCell ? sampleCell.clientWidth : 0;
+    const photoH     = Math.max(10, Math.min(Math.floor(cellW * 0.75), Math.floor(rowH * 0.65)));
+
+    grid.style.gridTemplateRows = `repeat(3, ${rowH}px)`;
+    document.querySelectorAll('.photo').forEach(p => { p.style.height = `${photoH}px`; });
+  }
+
+  window.addEventListener('resize', () => { _updateScale(); _autoFitGrid(); });
+  window.addEventListener('orientationchange', () => { _updateScale(); _autoFitGrid(); });
+  _updateScale();
+  _autoFitGrid();
+  setTimeout(() => { _updateScale(); _autoFitGrid(); }, 100);
+  setTimeout(() => { _updateScale(); _autoFitGrid(); }, 500);
 
   // ── localStorage save / restore ────────────────────────────────────
   const _LS = 'sobasay_horizontal';
@@ -609,8 +646,7 @@
       if (!raw) return;
       const data = JSON.parse(raw);
 
-      if (data.pageW && data.pageH) _applyPageSize(data.pageW, data.pageH);
-
+      // pageW/pageH from storage intentionally ignored — B5 is always fixed
       if (data.cells) {
         document.querySelectorAll('.cell').forEach((cell, i) => {
           const d = data.cells[i]; if (!d) return;
@@ -642,6 +678,8 @@
         });
       }
     } catch(e) { console.warn('sobasay_h restore:', e); }
+    // Re-fit grid after images may have changed cell sizes
+    setTimeout(_autoFitGrid, 200);
   }
 
   // Auto-save
