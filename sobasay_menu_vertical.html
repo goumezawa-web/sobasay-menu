@@ -9,7 +9,8 @@
 body {
   font-family: 'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
   background: #e0e0e0;
-  display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 /* ── タブバー ── */
@@ -68,10 +69,17 @@ body {
   --ink: #1a1a1a; --ink-mid: #333; --ink-light: #888;
   --accent: #1a1a1a; --accent-lt: #999; --rule: #ccc;
 }
+.stage {
+  width: 100%; overflow-x: hidden; overflow-y: visible;
+  padding: 20px 0 60px;
+}
+.scaler {
+  transform: scale(var(--scale, 1));
+  transform-origin: top center;
+}
 .page {
   width: 182mm; min-height: 257mm; background: #fff;
   position: relative; box-shadow: 2px 4px 20px rgba(0,0,0,0.12);
-  margin: 0 0 64px;
   font-family: 'Hiragino Mincho ProN','Yu Mincho',serif;
 }
 .corner { position: absolute; width: 12mm; height: 12mm; }
@@ -184,7 +192,9 @@ body {
 @page { size: 182mm 257mm; margin: 0; }
 @media print {
   .tabbar { display: none; }
-  body { background: none; margin: 0; padding: 0; }
+  body { background: none; margin: 0; padding: 0; overflow: visible; }
+  .stage { padding: 0 !important; overflow: visible !important; }
+  .scaler { transform: none !important; margin: 0 !important; }
   .page { box-shadow: none; margin: 0; }
   .insert-zone, .spacer-del { display: none !important; }
 }
@@ -276,6 +286,8 @@ body {
   </div>
 </div>
 
+<div class="stage">
+<div class="scaler">
 <div class="page">
   <div class="corner tl"></div><div class="corner tr"></div>
   <div class="corner bl"></div><div class="corner br"></div>
@@ -526,6 +538,8 @@ body {
     </div>
   </div>
 </div>
+</div><!-- /.scaler -->
+</div><!-- /.stage -->
 
 <script>
 document.querySelectorAll('.tab').forEach(tab => {
@@ -536,6 +550,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     const id = tab.dataset.tab;
     if (id !== 'settings') syncList(id);
+    setTimeout(_updateScale, 50);
   });
 });
 
@@ -648,8 +663,24 @@ function syncList(sid) {
   });
 }
 
-// ── B5 fixed dimensions ────────────────────────────────────────────
-const _pageW = 182, _pageH = 257;
+// ── B5 fixed dimensions & scale-to-width ──────────────────────────
+const _pageW = 182, _pageH = 257, _PX = 3.7795;
+const _pageWpx = _pageW * _PX;  // 688px
+
+function _updateScale() {
+  const s = Math.max(0.15, Math.min((window.innerWidth - 32) / _pageWpx, 1.0));
+  const scaler = document.querySelector('.scaler');
+  if (!scaler) return;
+  scaler.style.setProperty('--scale', s.toFixed(3));
+  const deadW = _pageWpx * (1 - s);
+  scaler.style.marginLeft  = -(deadW / 2) + 'px';
+  scaler.style.marginRight = -(deadW / 2) + 'px';
+}
+
+window.addEventListener('resize', _updateScale);
+window.addEventListener('orientationchange', _updateScale);
+_updateScale();
+setTimeout(_updateScale, 150);
 
 // ── localStorage save / restore ────────────────────────────────────
 const _LS = 'sobasay_vertical';
