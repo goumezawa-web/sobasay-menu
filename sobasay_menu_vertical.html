@@ -69,7 +69,7 @@ body {
   --accent: #1a1a1a; --accent-lt: #999; --rule: #ccc;
 }
 .page {
-  width: 210mm; min-height: 297mm; background: #fff;
+  width: 182mm; min-height: 257mm; background: #fff;
   position: relative; box-shadow: 2px 4px 20px rgba(0,0,0,0.12);
   margin: 0 0 64px;
   font-family: 'Hiragino Mincho ProN','Yu Mincho',serif;
@@ -81,7 +81,7 @@ body {
 .corner.br { bottom:5mm; right:5mm; border-bottom:1px solid var(--rule); border-right:1px solid var(--rule); }
 .inner {
   padding: 8mm 11mm 9mm;
-  display: flex; flex-direction: column; min-height: 297mm;
+  display: flex; flex-direction: column; min-height: 257mm;
 }
 
 .logo-mark {
@@ -181,9 +181,10 @@ body {
 .logo-word { flex-shrink: 0; margin-left: 6mm; }
 .logo-word img { height: 6mm; width: auto; mix-blend-mode: multiply; }
 
+@page { size: 182mm 257mm; margin: 0; }
 @media print {
   .tabbar { display: none; }
-  body { background: none; }
+  body { background: none; margin: 0; padding: 0; }
   .page { box-shadow: none; margin: 0; }
   .insert-zone, .spacer-del { display: none !important; }
 }
@@ -647,21 +648,8 @@ function syncList(sid) {
   });
 }
 
-// ── Dynamic page size ──────────────────────────────────────────────
-let _pageW = 210, _pageH = 297;
-
-function _applyPageSize(w, h) {
-  _pageW = w; _pageH = h;
-  const p = document.querySelector('.page');
-  if (p) { p.style.width = w + 'mm'; p.style.minHeight = h + 'mm'; }
-  let st = document.getElementById('_dynpage');
-  if (!st) { st = document.createElement('style'); st.id = '_dynpage'; document.head.appendChild(st); }
-  st.textContent = '@page { size: ' + w + 'mm ' + h + 'mm; margin: 0; }';
-}
-
-window.addEventListener('message', e => {
-  if (e.data && e.data.type === 'setPaperSize') _applyPageSize(e.data.w, e.data.h);
-});
+// ── B5 fixed dimensions ────────────────────────────────────────────
+const _pageW = 182, _pageH = 257;
 
 // ── localStorage save / restore ────────────────────────────────────
 const _LS = 'sobasay_vertical';
@@ -690,7 +678,6 @@ function _save() {
     wordSize:   document.getElementById('word-size')?.value,
     markSrc:    markFP !== _initMarkFP ? markImg.src : null,
     wordSrc:    wordFP !== _initWordFP ? wordImg.src : null,
-    pageW: _pageW, pageH: _pageH,
     ts: Date.now()
   };
 
@@ -708,8 +695,6 @@ function _restore() {
     const raw = localStorage.getItem(_LS);
     if (!raw) return;
     const data = JSON.parse(raw);
-
-    if (data.pageW && data.pageH) _applyPageSize(data.pageW, data.pageH);
 
     const colL = document.querySelector('.col-left');
     const colR = document.querySelector('.col-right');
