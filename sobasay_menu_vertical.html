@@ -699,6 +699,14 @@ const _initWordFP = (src => src ? src.length + '|' + src.slice(0, 16) : '')(
 );
 function _fp(src) { return src ? src.length + '|' + src.slice(0, 16) : ''; }
 
+function _colHTML(sel) {
+  const el = document.querySelector(sel);
+  if (!el) return '';
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('.insert-zone').forEach(z => z.remove());
+  return clone.innerHTML;
+}
+
 function _save() {
   const markImg = document.getElementById('mark-img');
   const wordImg = document.getElementById('word-img');
@@ -706,8 +714,8 @@ function _save() {
   const wordFP  = _fp(wordImg.src);
 
   const data = {
-    colLeft:    document.querySelector('.col-left')?.innerHTML  || '',
-    colRight:   document.querySelector('.col-right')?.innerHTML || '',
+    colLeft:    _colHTML('.col-left'),
+    colRight:   _colHTML('.col-right'),
     logoText:   document.querySelector('.logo-text')?.innerHTML || '',
     footerNote: document.querySelector('.footer-note')?.innerHTML || '',
     markSize:   document.getElementById('mark-size')?.value,
