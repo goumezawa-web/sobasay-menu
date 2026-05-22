@@ -655,14 +655,15 @@
           if (!photo) return;
           const img = photo.querySelector('.img');
           img.onload = () => {
-            const cw = photo.clientWidth  || 200;
-            const ch = photo.clientHeight || 150;
-            states.set(photo, {
-              img, natW: img.naturalWidth, natH: img.naturalHeight,
-              scale: pd.scale || Math.max(cw / img.naturalWidth, ch / img.naturalHeight),
-              baseScale: pd.baseScale || Math.max(cw / img.naturalWidth, ch / img.naturalHeight),
-              tx: pd.tx || 0, ty: pd.ty || 0
-            });
+            const natW = img.naturalWidth, natH = img.naturalHeight;
+            const cw = photo.clientWidth  || 184;
+            const ch = photo.clientHeight || 138;
+            img.style.width  = natW + 'px';
+            img.style.height = natH + 'px';
+            const baseScale = Math.max(cw / natW, ch / natH);
+            const tx = (cw - natW * baseScale) / 2;
+            const ty = (ch - natH * baseScale) / 2;
+            states.set(photo, { img, natW, natH, scale: baseScale, baseScale, tx, ty });
             photo.classList.add('has-image');
             applyTransform(photo);
           };
