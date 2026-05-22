@@ -10,7 +10,8 @@
   <meta name="apple-mobile-web-app-title" content="sobasay menu">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon.svg">
-  <title>sobasay menu v1.0.0</title>
+  <script src="version.js"></script>
+  <title>sobasay menu</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -211,12 +212,12 @@
 
     <!-- 横組みエディタ -->
     <div class="view active" id="view-h">
-      <iframe id="iframe-h" src="sobasay_menu_editor.html" title="横組みメニュー編集"></iframe>
+      <iframe id="iframe-h" title="横組みメニュー編集"></iframe>
     </div>
 
     <!-- 縦組みエディタ -->
     <div class="view" id="view-v">
-      <iframe id="iframe-v" src="sobasay_menu_vertical.html" title="縦組みメニュー編集"></iframe>
+      <iframe id="iframe-v" title="縦組みメニュー編集"></iframe>
     </div>
 
     <!-- 設定 -->
@@ -277,7 +278,7 @@
             ホーム画面に追加するとPWAとして<br>
             オフラインでも使用できます。
           </p>
-          <p class="info-text" style="margin-top:12px; color:rgba(255,255,255,0.35);">v1.0.0</p>
+          <p class="info-text" style="margin-top:12px; color:rgba(255,255,255,0.35);" id="ver-display"></p>
         </div>
       </div>
     </div>
@@ -427,6 +428,13 @@ document.getElementById('restore-input').addEventListener('change', e => {
   reader.readAsText(file);
   e.target.value = '';
 });
+
+// ── iframe src (cache-bust per version) ────────────────────────────
+document.getElementById('iframe-h').src = 'sobasay_menu_editor.html?v=' + APP_VERSION;
+document.getElementById('iframe-v').src = 'sobasay_menu_vertical.html?v=' + APP_VERSION;
+
+// ── Version display ─────────────────────────────────────────────────
+document.getElementById('ver-display').textContent = 'v' + APP_VERSION;
 
 // ── Service Worker ──────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {

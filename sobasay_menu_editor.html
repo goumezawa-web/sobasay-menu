@@ -232,6 +232,7 @@
     [contenteditable=true]:focus { outline: none !important; }
   }
 </style>
+<script src="version.js"></script>
 </head>
 <body>
 
@@ -241,6 +242,7 @@
   <button class="ghost" onclick="resetAll()">リセット</button>
   <div class="spacer"></div>
   <div class="hint">写真クリックで選択 ・ ドラッグで位置調整 ・ ホイールで拡大縮小 ・ ダブルクリックで差替</div>
+  <div id="ver-badge" style="font-size:11px; color:rgba(255,255,255,0.45); font-family:monospace; margin-left:8px; white-space:nowrap;"></div>
 </div>
 
 <div class="stage">
@@ -266,6 +268,8 @@
 <input type="file" id="filePicker" accept="image/*" style="display:none"/>
 
 <script>
+  document.getElementById('ver-badge').textContent = 'v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?') + ' | B5 | 横組み';
+
   const grid = document.getElementById('grid');
   const filePicker = document.getElementById('filePicker');
   let activePhoto = null;

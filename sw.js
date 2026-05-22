@@ -1,10 +1,12 @@
-const CACHE = 'sobasay-menu-v1.1.0';
+importScripts('./version.js');
+const CACHE = 'sobasay-menu-v' + APP_VERSION;
 const ASSETS = [
   './index.html',
   './sobasay_menu_editor.html',
   './sobasay_menu_vertical.html',
   './manifest.json',
-  './icons/icon.svg'
+  './icons/icon.svg',
+  './version.js'
 ];
 
 self.addEventListener('install', e => {

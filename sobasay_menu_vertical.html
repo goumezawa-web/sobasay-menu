@@ -199,17 +199,20 @@ body {
   .insert-zone, .spacer-del { display: none !important; }
 }
 </style>
+<script src="version.js"></script>
 </head>
 <body>
 
 <div class="tabbar">
   <div class="tabs">
     <div class="tab active" data-tab="settings">⚙ 設定</div>
+
     <div class="tab" data-tab="cold">冷たいそば</div>
     <div class="tab" data-tab="hot">温かいそば</div>
     <div class="tab" data-tab="sobamae">蕎麦前</div>
     <div class="tab" data-tab="drink">ドリンク</div>
   </div>
+  <div id="ver-badge" style="position:absolute; top:0; right:0; font-size:10px; color:rgba(255,255,255,0.4); font-family:monospace; padding:0 8px; line-height:39px; white-space:nowrap; pointer-events:none; z-index:10;"></div>
 
   <div class="panel active" id="panel-settings">
     <div class="ctrl-group">
@@ -542,6 +545,8 @@ body {
 </div><!-- /.stage -->
 
 <script>
+document.getElementById('ver-badge').textContent = 'v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?') + ' | B5 | 縦組み';
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
