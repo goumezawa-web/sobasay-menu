@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
+<title>AC-GOHAN 夏のおすすめメニュー — レイヤー復元デモ</title>
+<style>
+  :root {
+    --brown: #46392F;
+    --red: #CE2B37;
+    --beige: #F7F3EB;
+    --ink: #2B2B2B;
+    --sub: #666;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #f3f3f3;
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+  }
+
+  /* Toolbar (screen only) */
+  .toolbar {
+    position: sticky; top: 0; z-index: 50;
+    background: #111; color: #fff;
+    padding: 10px 16px;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .toolbar h1 { font-size: 14px; font-weight: 600; margin: 0 8px 0 0; letter-spacing: .04em; }
+  .toolbar button {
+    background: #fff; color: #111;
+    border: 0; border-radius: 6px; padding: 7px 14px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .toolbar .hint { font-size: 12px; color: #aaa; }
+  .toolbar .spacer { flex: 1; }
+
+  .stage { display: flex; justify-content: center; padding: 24px 16px 60px; }
+  .scaler { transform-origin: top center; transform: scale(var(--scale, 0.55)); }
+
+  /* ── B5ページ(背景レイヤー) ─────────────────────────────── */
+  .page {
+    width: 182mm; height: 257mm;
+    background: var(--beige);
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    position: relative;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  [contenteditable]:hover { outline: 1px dashed rgba(206,43,55,.5); }
+  [contenteditable]:focus { outline: 2px solid var(--red); }
+
+  /* ── ヘッダー帯(図形レイヤー) ───────────────────────────── */
+  .header {
+    background: var(--brown);
+    color: #fff;
+    height: 26mm;
+    display: flex; align-items: center;
+    padding: 0 12mm;
+    gap: 6mm;
+    flex-shrink: 0;
+  }
+  .logo { width: 15mm; height: 15mm; flex-shrink: 0; }
+  .shop-name .cafe { font-size: 8pt; letter-spacing: .3em; margin-bottom: 1mm; }
+  .shop-name .name { font-size: 20pt; font-weight: 700; letter-spacing: .08em; font-family: "Helvetica Neue", Arial, sans-serif; }
+
+  /* ── メインビジュアル(写真レイヤー+装飾レイヤー+文字レイヤー) ── */
+  .hero {
+    position: relative;
+    height: 90mm;
+    margin: 6mm 8mm 0;
+    flex-shrink: 0;
+  }
+  .hero .photo {
+    position: absolute; inset: 0;
+    background: #E8DCC8 url('') center/cover no-repeat;
+    overflow: hidden; cursor: pointer;
+  }
+  .hero .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo .ph-hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #A99B82; font-size: 10pt; letter-spacing: .1em;
+    pointer-events: none;
+  }
+  .photo.has-img .ph-hint { display: none; }
+
+  /* 太陽の装飾(ベクター再作図) */
+  .sunburst {
+    position: absolute;
+    top: 2mm; right: -2mm;
+    width: 62mm; height: 62mm;
+    pointer-events: none;
+  }
+  .sun-text {
+    position: absolute;
+    top: 8mm; right: 6mm;
+    width: 46mm; height: 46mm;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    pointer-events: auto;
+  }
+  .sun-text .natsu {
+    color: #fff; font-size: 34pt; font-weight: 800; line-height: 1;
+    text-shadow: 0 0 1px rgba(0,0,0,.05);
+  }
+  .badge {
+    position: absolute; top: 10mm; right: 5.5mm;
+    background: var(--red); color: #fff;
+    border: 1.2px solid #fff; border-radius: 1.5mm;
+    font-size: 9pt; font-weight: 700;
+    line-height: 1.25;
+    padding: 1.2mm 1mm;
+    width: calc(9pt + 2mm + 2.4px);
+    word-break: break-all;
+    text-align: center;
+  }
+  .sun-circle {
+    position: absolute;
+    bottom: -14mm; right: 10mm;
+    width: 34mm; height: 34mm;
+    background: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1mm 3mm rgba(0,0,0,.08);
+  }
+  .sun-circle .osusume {
+    color: var(--red); font-weight: 800;
+    font-size: 12.5pt; line-height: 1.35; text-align: center;
+  }
+
+  /* ── 品名・説明(文字レイヤー) ───────────────────────────── */
+  .item-line {
+    display: flex; align-items: baseline; gap: 2.5mm;
+    font-weight: 700;
+  }
+  .item-line .chili { width: 4.2mm; height: 4.2mm; flex-shrink: 0; align-self: center; }
+  .item-line .item-name { font-size: 13pt; letter-spacing: .04em; }
+  .item-line .item-price { margin-left: auto; font-size: 12pt; }
+  .item-desc {
+    font-size: 7.5pt; color: var(--sub); line-height: 1.7;
+    margin-top: 1.5mm;
+  }
+
+  .hero-caption { margin: 4mm 8mm 0; padding-right: 46mm; }
+  .hero-caption .item-line .item-price { margin-left: 6mm; }
+
+  /* ── 2品グリッド ─────────────────────────────────────────── */
+  .grid2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 0 6mm;
+    margin: 4mm 8mm 0;
+    flex: 1; min-height: 0;
+    overflow: hidden;
+  }
+  .cell { min-height: 0; overflow: hidden; }
+  .cell .photo {
+    position: relative;
+    height: 58mm;
+    background: #E8DCC8;
+    overflow: hidden; cursor: pointer;
+  }
+  .cell .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cell .item-line { margin-top: 3mm; }
+
+  /* ── フッター帯(図形+文字レイヤー) ─────────────────────── */
+  .footer {
+    background: var(--brown);
+    height: 15mm;
+    margin-top: 4mm;
+    flex-shrink: 0;
+    display: flex; align-items: center;
+    padding: 0 8mm;
+    gap: 3mm;
+    color: #fff;
+  }
+  .footer .note-box {
+    background: #fff; color: var(--ink);
+    font-size: 8pt; font-weight: 600;
+    padding: 2mm 3mm;
+    flex: 1;
+    white-space: nowrap;
+  }
+  .rice-chip {
+    border: 1px solid rgba(255,255,255,.85);
+    border-radius: 1.5mm;
+    font-size: 8pt; font-weight: 700;
+    padding: 1.6mm 2.5mm;
+    white-space: nowrap;
+  }
+  .bottom-strip {
+    height: 7mm;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 8mm;
+  }
+  .tax-note { font-size: 6pt; color: var(--sub); }
+
+  /* ── 印刷 ────────────────────────────────────────────────── */
+  @page { size: 182mm 257mm; margin: 0; }
+  @media print {
+    .toolbar { display: none; }
+    .stage { padding: 0; }
+    .scaler { transform: none; }
+    .page { box-shadow: none; }
+    .ph-hint { display: none; }
+    [contenteditable]:hover, [contenteditable]:focus { outline: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>AC-GOHAN ポスター復元デモ</h1>
+  <button onclick="window.print()">🖨 印刷 / PDF</button>
+  <span class="spacer"></span>
+  <span class="hint">文字はクリックで編集、写真はクリックで差し替え</span>
+</div>
+
+<div class="stage">
+<div class="scaler">
+<div class="page">
+
+  <!-- ═══ レイヤー1: ヘッダー帯(図形) + ロゴ(ベクター) + 店名(文字) ═══ -->
+  <div class="header">
+    <svg class="logo" viewBox="0 0 60 60" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round">
+      <circle cx="30" cy="30" r="27" />
+      <path d="M14 32 h32 a16 9 0 0 1 -32 0 z" fill="#fff" stroke="none"/>
+      <path d="M20 26 q4 -5 10 -3 q6 2 10 -2" fill="none"/>
+      <path d="M23 20 q3 -3 7 -2 q4 1 7 -2" fill="none"/>
+    </svg>
+    <div class="shop-name">
+      <div class="cafe" contenteditable>カフェ＆食堂</div>
+      <div class="name" contenteditable>AC-GOHAN</div>
+    </div>
+  </div>
+
+  <!-- ═══ レイヤー2: メイン写真 ═══ -->
+  <div class="hero">
+    <div class="photo" data-photo>
+      <span class="ph-hint">クリックで写真を配置</span>
+    </div>
+
+    <!-- ═══ レイヤー3: 太陽の装飾(ベクター再作図) ═══ -->
+    <svg class="sunburst" viewBox="-60 -60 120 120">
+      <g fill="#CE2B37">
+        <circle r="34" />
+        <g id="rays">
+          <polygon points="0,-56 6,-40 -6,-40" />
+        </g>
+      </g>
+      <use href="#rays" transform="rotate(30)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(60)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(90)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(120)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(150)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(180)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(210)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(240)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(270)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(300)" fill="#CE2B37"/>
+      <use href="#rays" transform="rotate(330)" fill="#CE2B37"/>
+    </svg>
+
+    <!-- ═══ レイヤー4: キャッチコピー(文字) ═══ -->
+    <div class="sun-text">
+      <div class="natsu" contenteditable>夏</div>
+      <div class="badge" contenteditable>旨辛</div>
+      <div class="sun-circle">
+        <div class="osusume" contenteditable>の<br>おすすめ<br>メニュー</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ レイヤー5: メイン品名+説明(文字) ═══ -->
+  <div class="hero-caption">
+    <div class="item-line">
+      <svg class="chili" viewBox="0 0 20 20"><path d="M6 4 q1 -3 4 -3 q-1 2 0 3 q6 1 8 8 q1 5 -5 6 q-8 1 -11 -8 q3 2 4 -6z" fill="#CE2B37"/></svg>
+      <span class="item-name" contenteditable>旨辛よだれ鶏定食</span>
+      <span class="item-price" contenteditable>¥0,000</span>
+    </div>
+    <p class="item-desc" contenteditable>この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。この文章はダミーです。</p>
+  </div>
+
+  <!-- ═══ レイヤー6: 2品グリッド(写真+文字) ═══ -->
+  <div class="grid2">
+    <div class="cell">
+      <div class="photo" data-photo><span class="ph-hint">クリックで写真を配置</span></div>
+      <div class="item-line">
+        <svg class="chili" viewBox="0 0 20 20"><path d="M6 4 q1 -3 4 -3 q-1 2 0 3 q6 1 8 8 q1 5 -5 6 q-8 1 -11 -8 q3 2 4 -6z" fill="#CE2B37"/></svg>
+        <span class="item-name" contenteditable>手作りマーボー豆腐</span>
+        <span class="item-price" contenteditable>¥0,000</span>
+      </div>
+      <p class="item-desc" contenteditable>この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。</p>
+    </div>
+    <div class="cell">
+      <div class="photo" data-photo><span class="ph-hint">クリックで写真を配置</span></div>
+      <div class="item-line">
+        <svg class="chili" viewBox="0 0 20 20"><path d="M6 4 q1 -3 4 -3 q-1 2 0 3 q6 1 8 8 q1 5 -5 6 q-8 1 -11 -8 q3 2 4 -6z" fill="#CE2B37"/></svg>
+        <span class="item-name" contenteditable>本格石焼ビビンバ</span>
+        <span class="item-price" contenteditable>¥0,000</span>
+      </div>
+      <p class="item-desc" contenteditable>この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。この文章はダミーです。ここに商品の詳細説明、特徴等を記載ください。</p>
+    </div>
+  </div>
+
+  <!-- ═══ レイヤー7: フッター帯(図形+文字) ═══ -->
+  <div class="footer">
+    <div class="note-box" contenteditable>全てのメニューにお味噌汁（スープ）・お漬物・サラダが付きます。</div>
+    <div class="rice-chip" contenteditable>ごはん大盛 ＋¥000</div>
+    <div class="rice-chip" contenteditable>ごはん小盛 −¥000</div>
+  </div>
+  <div class="bottom-strip">
+    <span class="tax-note" contenteditable>※全て税込での価格表記となります。</span>
+  </div>
+
+</div><!-- /page -->
+</div>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" style="display:none">
+
+<script>
+'use strict';
+
+// ── 画面フィットスケール ─────────────────────────────────────
+const PAGE_MM_W = 182;
+function fitScale() {
+  const pagePx = PAGE_MM_W * 96 / 25.4;
+  const scale = Math.min(1, (window.innerWidth - 32) / pagePx);
+  document.querySelector('.scaler').style.setProperty('--scale', scale.toFixed(3));
+}
+window.addEventListener('resize', fitScale);
+fitScale();
+
+// ── 写真差し替え ─────────────────────────────────────────────
+const input = document.getElementById('photo-input');
+let target = null;
+
+document.querySelectorAll('[data-photo]').forEach(el => {
+  el.addEventListener('click', () => { target = el; input.click(); });
+});
+
+input.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file || !target) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let img = target.querySelector('img');
+    if (!img) { img = document.createElement('img'); target.appendChild(img); }
+    img.src = ev.target.result;
+    target.classList.add('has-img');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+</script>
+</body>
+</html>
