@@ -4,6 +4,7 @@ const ASSETS = [
   './index.html',
   './sobasay_menu_editor.html',
   './sobasay_menu_vertical.html',
+  './poster_import.html',
   './manifest.json',
   './icons/icon.svg',
   './version.js'

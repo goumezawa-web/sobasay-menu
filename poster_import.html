@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ポスター取込 — 画像からレイヤー化</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #1B3A5C;
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+    color: #fff;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; letter-spacing: .04em; }
+  .lead { font-size: 12px; color: rgba(255,255,255,.6); line-height: 1.7; margin-bottom: 20px; }
+
+  .section {
+    background: rgba(255,255,255,.1);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,.6);
+    letter-spacing: .12em; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: 8px;
+    padding: 11px 12px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input::placeholder { color: rgba(255,255,255,.35); }
+  .note { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 8px; line-height: 1.6; }
+
+  .drop {
+    border: 2px dashed rgba(255,255,255,.3);
+    border-radius: 10px;
+    padding: 26px 16px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    color: rgba(255,255,255,.65);
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: #fff; background: rgba(255,255,255,.06); }
+  .drop img { max-width: 100%; max-height: 260px; border-radius: 6px; display: block; margin: 0 auto; }
+
+  .run-btn {
+    width: 100%;
+    border: none; border-radius: 10px;
+    padding: 15px 20px;
+    font-size: 15px; font-weight: 700;
+    font-family: inherit;
+    background: #3B82F6; color: #fff;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .run-btn:disabled { opacity: .4; cursor: default; }
+  .run-btn:active:not(:disabled) { opacity: .8; }
+
+  .status {
+    font-size: 12px;
+    color: rgba(255,255,255,.6);
+    margin-top: 10px;
+    min-height: 1.5em;
+    text-align: center;
+    white-space: pre-wrap;
+  }
+  .status.err { color: #FCA5A5; }
+
+  .result { display: none; }
+  .result.show { display: block; }
+  .result iframe {
+    width: 100%;
+    height: 460px;
+    border: none;
+    border-radius: 8px;
+    background: #fff;
+  }
+  .result-actions { display: flex; gap: 10px; margin-top: 10px; }
+  .result-actions button {
+    flex: 1;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 8px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    padding: 12px;
+    font-size: 13px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>📄 ポスター取込</h2>
+  <p class="lead">ポスターやメニューの画像をAI(Claude Opus)が解析して、文字・図形・写真がレイヤー分離された編集可能なHTMLを生成します。1枚あたり数十円程度のAPI利用料がかかります。</p>
+
+  <div class="section">
+    <div class="section-title">APIキー</div>
+    <input type="password" id="api-key" placeholder="sk-ant-api03-..." autocomplete="off">
+    <p class="note">Anthropicのコンソール(console.anthropic.com)で発行したAPIキー。この端末のブラウザ内にのみ保存され、外部にはAnthropicのAPI以外へ送信されません。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ポスター画像</div>
+    <div class="drop" id="drop">クリックして画像を選択(またはドラッグ&ドロップ)</div>
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+  </div>
+
+  <button class="run-btn" id="run" disabled>🎨 レイヤー化する</button>
+  <p class="status" id="status"></p>
+
+  <div class="section result" id="result">
+    <div class="section-title">生成結果(プレビュー)</div>
+    <iframe id="preview" title="生成されたポスター"></iframe>
+    <div class="result-actions">
+      <button id="open-tab">🔍 新しいタブで開く</button>
+      <button id="download">💾 HTMLを保存</button>
+    </div>
+    <p class="note">保存したHTMLはブラウザで開くだけで使えます。文字はクリックで編集、写真枠はクリックで差し替えできます。</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const KEY_STORE = 'sobasay_anthropic_key';
+
+const $key    = document.getElementById('api-key');
+const $drop   = document.getElementById('drop');
+const $file   = document.getElementById('file-input');
+const $run    = document.getElementById('run');
+const $status = document.getElementById('status');
+const $result = document.getElementById('result');
+const $preview = document.getElementById('preview');
+
+let imageBase64 = null;   // JPEG base64 (プレフィックスなし)
+let generatedHtml = null;
+
+// ── APIキーの保存/復元 ───────────────────────────────────────
+$key.value = localStorage.getItem(KEY_STORE) || '';
+$key.addEventListener('input', () => {
+  localStorage.setItem(KEY_STORE, $key.value.trim());
+  updateRunState();
+});
+
+// ── 画像選択(長辺2000pxに縮小してJPEG化) ─────────────────────
+$drop.addEventListener('click', () => $file.click());
+$drop.addEventListener('dragover', e => { e.preventDefault(); $drop.classList.add('over'); });
+$drop.addEventListener('dragleave', () => $drop.classList.remove('over'));
+$drop.addEventListener('drop', e => {
+  e.preventDefault();
+  $drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+});
+$file.addEventListener('change', e => {
+  if (e.target.files[0]) loadImage(e.target.files[0]);
+  e.target.value = '';
+});
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const im = new Image();
+    im.onload = () => {
+      const MAX = 2000;
+      const r = Math.min(1, MAX / Math.max(im.width, im.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(im.width * r);
+      c.height = Math.round(im.height * r);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const dataUrl = c.toDataURL('image/jpeg', 0.9);
+      imageBase64 = dataUrl.split(',')[1];
+      $drop.innerHTML = '';
+      const thumb = new Image();
+      thumb.src = dataUrl;
+      $drop.appendChild(thumb);
+      updateRunState();
+    };
+    im.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateRunState() {
+  $run.disabled = !(imageBase64 && $key.value.trim());
+}
+
+// ── プロンプト ────────────────────────────────────────────────
+const SYSTEM_PROMPT = `あなたはポスター・メニューのデザインをHTMLとして復元する専門家です。
+渡された画像を解析し、次の仕様を満たす完全な単一HTMLドキュメントを生成してください。
+
+【必須仕様】
+1. 画像内の全テキストを読み取り、HTMLのテキスト要素として復元する。すべてのテキスト要素に contenteditable を付け、クリックでその場編集できるようにする
+2. 帯・図形・ロゴ・アイコン・装飾は画像から切り抜かず、CSSまたはインラインSVGのベクターとして再作図する
+3. 写真が入っている領域は data-photo 属性を持つ空のプレースホルダ枠にする。クリックすると <input type="file"> で端末の画像を選んで <img>(object-fit:cover)として配置できるJSを実装する
+4. 編集内容(全contenteditableのinnerHTMLと全写真のdataURL)をinputイベントのたびにlocalStorageへ保存し、ページ読込時に復元する自動保存を実装する。写真は保存前にcanvasで長辺1600pxへ縮小する
+5. ページは元ポスターの縦横比に合わせた用紙実寸(近い定型サイズがあればB5=182×257mmやA4=210×297mmを使う)でmm単位指定し、@page と @media print で余白なし原寸印刷に対応する
+6. 画面表示時はページ全体をウィンドウ幅に収める transform: scale() のフィットスケールを実装する
+7. 画面上部に印刷ボタン(window.print())を持つツールバー(printでは非表示)を付ける
+8. 配色は画像からスポイトした近似色を使い、フォントは日本語ゴシック系("Hiragino Sans","Yu Gothic","Noto Sans JP")を基本にレイアウトの印象を合わせる
+
+【出力形式】
+説明文は一切書かず、<!doctype html> から始まる完全なHTMLドキュメントのみを出力する。コードフェンスも不要。`;
+
+// ── 生成実行(ストリーミング) ─────────────────────────────────
+$run.addEventListener('click', async () => {
+  $run.disabled = true;
+  $result.classList.remove('show');
+  setStatus('解析中… (1〜3分かかります)');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': $key.value.trim(),
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: 32000,
+        stream: true,
+        thinking: { type: 'adaptive' },
+        system: SYSTEM_PROMPT,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+            { type: 'text', text: 'このポスターをレイヤー分離された編集可能なHTMLとして復元してください。' }
+          ]
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { msg = (await res.json()).error?.message || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+
+    // SSEを読みながらテキストを蓄積
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', text = '', stopReason = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+          text += ev.delta.text;
+          setStatus('生成中… ' + text.length.toLocaleString() + ' 文字');
+        } else if (ev.type === 'message_delta' && ev.delta?.stop_reason) {
+          stopReason = ev.delta.stop_reason;
+        } else if (ev.type === 'error') {
+          throw new Error(ev.error?.message || 'ストリームエラー');
+        }
+      }
+    }
+
+    if (stopReason === 'max_tokens') {
+      throw new Error('出力が長すぎて途中で切れました。もう一度試すか、画像を単純なものにしてください。');
+    }
+
+    generatedHtml = extractHtml(text);
+    if (!generatedHtml) throw new Error('HTMLを抽出できませんでした。もう一度試してください。');
+
+    $preview.srcdoc = generatedHtml;
+    $result.classList.add('show');
+    setStatus('完成 ✓ プレビューで確認して保存してください');
+  } catch (err) {
+    setStatus('エラー: ' + err.message, true);
+  } finally {
+    $run.disabled = false;
+    updateRunState();
+  }
+});
+
+function extractHtml(text) {
+  const fence = text.match(/```html\s*([\s\S]*?)```/i);
+  if (fence) return fence[1].trim();
+  const lower = text.toLowerCase();
+  const start = lower.indexOf('<!doctype html');
+  if (start >= 0) {
+    const end = lower.lastIndexOf('</html>');
+    return end > start ? text.slice(start, end + 7) : text.slice(start);
+  }
+  return null;
+}
+
+function setStatus(msg, isErr) {
+  $status.textContent = msg;
+  $status.classList.toggle('err', !!isErr);
+}
+
+// ── 結果の保存・表示 ─────────────────────────────────────────
+document.getElementById('open-tab').addEventListener('click', () => {
+  if (!generatedHtml) return;
+  const url = URL.createObjectURL(new Blob([generatedHtml], { type: 'text/html' }));
+  window.open(url, '_blank');
+});
+
+document.getElementById('download').addEventListener('click', () => {
+  if (!generatedHtml) return;
+  const url = URL.createObjectURL(new Blob([generatedHtml], { type: 'text/html' }));
+  const a = Object.assign(document.createElement('a'), {
+    href: url,
+    download: 'poster_' + new Date().toISOString().slice(0, 10) + '.html'
+  });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+});
+</script>
+</body>
+</html>

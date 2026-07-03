@@ -220,6 +220,11 @@
       <iframe id="iframe-v" title="縦組みメニュー編集"></iframe>
     </div>
 
+    <!-- ポスター取込 -->
+    <div class="view" id="view-p">
+      <iframe id="iframe-p" title="ポスター取込"></iframe>
+    </div>
+
     <!-- 設定 -->
     <div class="view" id="view-s">
       <div class="settings">
@@ -294,6 +299,10 @@
     <button class="nav-btn" data-view="v">
       <span class="nav-icon">📋</span>
       <span class="nav-label">縦組み編集</span>
+    </button>
+    <button class="nav-btn" data-view="p">
+      <span class="nav-icon">📄</span>
+      <span class="nav-label">ポスター取込</span>
     </button>
     <button class="nav-btn" data-view="s">
       <span class="nav-icon">⚙️</span>
@@ -432,6 +441,7 @@ document.getElementById('restore-input').addEventListener('change', e => {
 // ── iframe src (cache-bust per version) ────────────────────────────
 document.getElementById('iframe-h').src = 'sobasay_menu_editor.html?v=' + APP_VERSION;
 document.getElementById('iframe-v').src = 'sobasay_menu_vertical.html?v=' + APP_VERSION;
+document.getElementById('iframe-p').src = 'poster_import.html?v=' + APP_VERSION;
 
 // ── Version display ─────────────────────────────────────────────────
 document.getElementById('ver-display').textContent = 'v' + APP_VERSION;
