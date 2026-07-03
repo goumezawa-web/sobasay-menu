@@ -336,27 +336,75 @@ function fitScale() {
 window.addEventListener('resize', fitScale);
 fitScale();
 
+// ── 自動保存(sobasayエディタと同じくlocalStorage) ─────────────
+const STORE_KEY = 'poster_ac_gohan_v1';
+const editables = [...document.querySelectorAll('[contenteditable]')];
+const photos    = [...document.querySelectorAll('[data-photo]')];
+
+function saveState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      texts:  editables.map(el => el.innerHTML),
+      images: photos.map(el => el.querySelector('img')?.src || null)
+    }));
+  } catch (e) { /* 容量超過時は諦める */ }
+}
+
+function restoreState() {
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    (data.texts || []).forEach((html, i) => { if (html != null && editables[i]) editables[i].innerHTML = html; });
+    (data.images || []).forEach((src, i) => { if (src && photos[i]) setPhoto(photos[i], src); });
+  } catch (e) { /* 壊れたデータは無視 */ }
+}
+
+editables.forEach(el => el.addEventListener('input', saveState));
+
 // ── 写真差し替え ─────────────────────────────────────────────
 const input = document.getElementById('photo-input');
 let target = null;
 
-document.querySelectorAll('[data-photo]').forEach(el => {
+photos.forEach(el => {
   el.addEventListener('click', () => { target = el; input.click(); });
 });
+
+function setPhoto(el, src) {
+  let img = el.querySelector('img');
+  if (!img) { img = document.createElement('img'); el.appendChild(img); }
+  img.src = src;
+  el.classList.add('has-img');
+}
+
+// localStorageに収まるよう長辺1600pxに縮小してから保存
+function shrink(dataUrl, cb) {
+  const im = new Image();
+  im.onload = () => {
+    const MAX = 1600;
+    const r = Math.min(1, MAX / Math.max(im.width, im.height));
+    if (r >= 1) { cb(dataUrl); return; }
+    const c = document.createElement('canvas');
+    c.width = Math.round(im.width * r);
+    c.height = Math.round(im.height * r);
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    cb(c.toDataURL('image/jpeg', 0.85));
+  };
+  im.src = dataUrl;
+}
 
 input.addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file || !target) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    let img = target.querySelector('img');
-    if (!img) { img = document.createElement('img'); target.appendChild(img); }
-    img.src = ev.target.result;
-    target.classList.add('has-img');
+    shrink(ev.target.result, src => { setPhoto(target, src); saveState(); });
   };
   reader.readAsDataURL(file);
   e.target.value = '';
 });
+
+restoreState();
 </script>
 </body>
 </html>
