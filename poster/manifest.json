@@ -1,0 +1,25 @@
+{
+  "name": "ポスター取込 AI",
+  "short_name": "ポスター取込",
+  "description": "ポスター画像をAIで解析してレイヤー分離された編集可能なHTMLを生成",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1B3A5C",
+  "theme_color": "#1B3A5C",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,15 +1,9 @@
-importScripts('./version.js');
-const CACHE = 'sobasay-menu-v' + APP_VERSION;
+const POSTER_VERSION = '1.0.0';
+const CACHE = 'poster-ai-v' + POSTER_VERSION;
 const ASSETS = [
   './index.html',
-  './sobasay_menu_editor.html',
-  './sobasay_menu_vertical.html',
-  './poster/index.html',
-  './poster/manifest.json',
-  './poster/icon.svg',
   './manifest.json',
-  './icons/icon.svg',
-  './version.js'
+  './icon.svg'
 ];
 
 self.addEventListener('install', e => {
@@ -21,13 +15,15 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k.startsWith('poster-ai-') && k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
+  // API呼び出し(POST)はそのまま通す。GETのみキャッシュ
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(cached => {
       if (cached) return cached;

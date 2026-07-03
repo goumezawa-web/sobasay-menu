@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1B3A5C" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ポスター取込" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.svg" />
 <title>ポスター取込 — 画像からレイヤー化</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -333,6 +340,11 @@ document.getElementById('download').addEventListener('click', () => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 });
+
+// ── PWA: Service Worker登録 ──────────────────────────────────
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
