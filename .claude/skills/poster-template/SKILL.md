@@ -9,9 +9,9 @@ description: レイヤー式ポスターHTML(編集可能テンプレート)の�
 
 ## レイヤー構成
 
-1. **文字レイヤー**: すべてのテキスト要素に `contenteditable`。ホバー時に赤破線アウトライン
+1. **文字レイヤー**: すべてのテキスト要素に `contenteditable` 属性(識別マーカー)。編集は**モーダル**(textarea+文字サイズスライダー50〜300%、基準は `data-basefs`)
 2. **図形レイヤー**: 帯・ロゴ・アイコン・装飾はCSSまたはインラインSVGで作図(ラスター画像禁止)
-3. **写真レイヤー**: `[data-photo]` の空div。クリック→file input→`<img>`(object-fit:cover)を挿入
+3. **写真レイヤー**: `[data-photo]` の空div(overflow:hidden)。クリック→file input→**調整モーダル**(ドラッグ移動+ピンチ/スライダー拡大1〜3倍)。transform値は `data-ps/px/py` に保持しlocalStorageへ永続化
 
 ## ページ構造
 

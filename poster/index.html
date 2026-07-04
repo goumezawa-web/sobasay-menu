@@ -243,10 +243,29 @@ const SHELL_HEAD = `<!doctype html>
   .page { background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); position: relative; overflow: hidden; }
   [contenteditable]:hover { outline: 1px dashed rgba(206,43,55,.5); }
   [contenteditable]:focus { outline: 2px solid #CE2B37; }
-  [data-photo] { cursor: pointer; position: relative; background: rgba(0,0,0,.06); }
+  [data-photo] { cursor: pointer; position: relative; overflow: hidden; background: rgba(0,0,0,.06); }
   [data-photo]:empty::after { content: 'クリックで写真を配置'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10pt; color: rgba(0,0,0,.35); letter-spacing: .1em; }
-  [data-photo] img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  [data-photo] img { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }
+  [contenteditable] { cursor: pointer; }
+
+  /* ── 編集モーダル(画面のみ) ── */
+  .__modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .__modal.show { display: flex; }
+  .__panel { background: #fff; border-radius: 14px; padding: 16px; width: min(92vw, 540px); max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+  .__panel h3 { font-size: 14px; margin-bottom: 10px; }
+  .__hint { font-size: 11px; color: #888; margin-top: 6px; }
+  .__viewport { position: relative; overflow: hidden; background: #e8e8e8; touch-action: none; margin: 0 auto; border-radius: 6px; }
+  .__viewport img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-select: none; pointer-events: none; }
+  .__row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .__row label { font-size: 12px; color: #555; white-space: nowrap; }
+  .__row input[type=range] { flex: 1; }
+  .__row .__val { font-size: 12px; color: #555; width: 44px; text-align: right; }
+  .__btns { display: flex; gap: 8px; margin-top: 14px; }
+  .__btns button { flex: 1; padding: 11px 6px; border-radius: 8px; border: 1px solid #ccc; background: #f5f5f5; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .__btns .__pri { background: #111; color: #fff; border-color: #111; }
+  .__panel textarea { width: 100%; min-height: 90px; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; resize: vertical; }
   @media print {
+    .__modal { display: none !important; }
     .toolbar { display: none; }
     .stage { padding: 0; }
     .scaler { transform: none; }
@@ -271,11 +290,40 @@ function shellTail(storeKey) {
   return `
 </div></div>
 <input type="file" id="__photo_input" accept="image/*" style="display:none">
+
+<div class="__modal" id="__pmodal">
+  <div class="__panel">
+    <h3>&#128247; 写真の位置と大きさ</h3>
+    <div class="__viewport" id="__pview"><img id="__pimg" alt=""></div>
+    <div class="__row"><label>拡大縮小</label><input type="range" id="__pzoom" min="100" max="300" value="100"><span class="__val" id="__pzoomval">100%</span></div>
+    <p class="__hint">ドラッグで位置調整 / ピンチまたはスライダーで拡大縮小</p>
+    <div class="__btns">
+      <button id="__pchange">写真を変更</button>
+      <button id="__pcancel">キャンセル</button>
+      <button class="__pri" id="__pok">決定</button>
+    </div>
+  </div>
+</div>
+
+<div class="__modal" id="__tmodal">
+  <div class="__panel">
+    <h3>&#9999;&#65039; 文字の編集</h3>
+    <textarea id="__tarea"></textarea>
+    <div class="__row"><label>文字サイズ</label><input type="range" id="__tsize" min="50" max="300" value="100"><span class="__val" id="__tsizeval">100%</span></div>
+    <p class="__hint">サイズはスライダーを動かすと下のポスターに即時反映されます</p>
+    <div class="__btns">
+      <button id="__tcancel">キャンセル</button>
+      <button class="__pri" id="__tok">決定</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 const STORE_KEY = '` + storeKey + `';
 const editables = [...document.querySelectorAll('[contenteditable]')];
 const photos    = [...document.querySelectorAll('[data-photo]')];
+const $ = id => document.getElementById(id);
 
 function fitScale() {
   const p = document.querySelector('.page');
@@ -286,36 +334,57 @@ function fitScale() {
 window.addEventListener('resize', fitScale);
 fitScale();
 
+// ── 状態の保存/復元 ──────────────────────────────────────────
 function saveState() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      texts:  editables.map(el => el.innerHTML),
-      images: photos.map(el => el.querySelector('img')?.src || null)
+      texts: editables.map(el => ({ h: el.innerHTML, fs: el.style.fontSize || null })),
+      images: photos.map(el => {
+        const img = el.querySelector('img');
+        if (!img) return null;
+        return { src: img.src, s: +el.dataset.ps || 1, x: +el.dataset.px || 0, y: +el.dataset.py || 0 };
+      })
     }));
   } catch (e) {}
 }
 
-function setPhoto(el, src) {
+function applyPhoto(el, d) {
   let img = el.querySelector('img');
   if (!img) { img = document.createElement('img'); el.appendChild(img); }
-  img.src = src;
+  img.src = d.src;
+  el.dataset.ps = d.s || 1; el.dataset.px = d.x || 0; el.dataset.py = d.y || 0;
+  img.style.transform = 'translate(' + (d.x || 0) + '%, ' + (d.y || 0) + '%) scale(' + (d.s || 1) + ')';
 }
+
+// 元の文字サイズを先に記録(復元やサイズ変更の基準値)
+editables.forEach(el => {
+  el.dataset.basefs = parseFloat(getComputedStyle(el).fontSize) || 16;
+  el.setAttribute('contenteditable', 'false');
+});
 
 (function restore() {
   const raw = localStorage.getItem(STORE_KEY);
   if (!raw) return;
   try {
     const d = JSON.parse(raw);
-    (d.texts || []).forEach((h, i) => { if (h != null && editables[i]) editables[i].innerHTML = h; });
-    (d.images || []).forEach((s, i) => { if (s && photos[i]) setPhoto(photos[i], s); });
+    (d.texts || []).forEach((t, i) => {
+      const el = editables[i]; if (t == null || !el) return;
+      if (typeof t === 'string') { el.innerHTML = t; return; }
+      if (t.h != null) el.innerHTML = t.h;
+      if (t.fs) el.style.fontSize = t.fs;
+    });
+    (d.images || []).forEach((m, i) => {
+      const el = photos[i]; if (!m || !el) return;
+      if (typeof m === 'string') applyPhoto(el, { src: m, s: 1, x: 0, y: 0 });
+      else applyPhoto(el, m);
+    });
   } catch (e) {}
 })();
 
-editables.forEach(el => el.addEventListener('input', saveState));
-
+// ── 写真: 選択→縮小 ─────────────────────────────────────────
 const input = document.getElementById('__photo_input');
 let target = null;
-photos.forEach(el => el.addEventListener('click', () => { target = el; input.click(); }));
+let changeInModal = false;
 
 function shrink(dataUrl, cb) {
   const im = new Image();
@@ -334,11 +403,149 @@ function shrink(dataUrl, cb) {
 
 input.addEventListener('change', e => {
   const f = e.target.files[0];
+  e.target.value = '';
   if (!f || !target) return;
   const reader = new FileReader();
-  reader.onload = ev => shrink(ev.target.result, src => { setPhoto(target, src); saveState(); });
+  reader.onload = ev => shrink(ev.target.result, src => {
+    if (changeInModal) {           // モーダル内の「写真を変更」
+      pData = { src, s: 1, x: 0, y: 0 };
+      pImg.src = src; pZoom.value = 100; renderP();
+      changeInModal = false;
+    } else {                       // 新規配置 → 即適用してモーダルで調整
+      applyPhoto(target, { src, s: 1, x: 0, y: 0 });
+      saveState();
+      openPhotoModal(target);
+    }
+  });
   reader.readAsDataURL(f);
-  e.target.value = '';
+});
+
+photos.forEach(el => el.addEventListener('click', () => {
+  target = el;
+  if (el.querySelector('img')) openPhotoModal(el);
+  else input.click();
+}));
+
+// ── 写真モーダル(移動・拡大縮小) ────────────────────────────
+const pModal = $('__pmodal'), pView = $('__pview'), pImg = $('__pimg');
+const pZoom = $('__pzoom'), pZoomVal = $('__pzoomval');
+let pData = null;
+
+function openPhotoModal(el) {
+  target = el;
+  const img = el.querySelector('img');
+  if (!img) return;
+  pData = { src: img.src, s: +el.dataset.ps || 1, x: +el.dataset.px || 0, y: +el.dataset.py || 0 };
+  const r = el.getBoundingClientRect();
+  const maxW = Math.min(window.innerWidth * 0.84, 480);
+  const maxH = window.innerHeight * 0.42;
+  let w = maxW, h = w * r.height / r.width;
+  if (h > maxH) { h = maxH; w = h * r.width / r.height; }
+  pView.style.width = w + 'px'; pView.style.height = h + 'px';
+  pImg.src = pData.src;
+  pZoom.value = Math.round(pData.s * 100);
+  renderP();
+  pModal.classList.add('show');
+}
+
+function clampP() {
+  const m = (pData.s - 1) * 50;
+  pData.x = Math.max(-m, Math.min(m, pData.x));
+  pData.y = Math.max(-m, Math.min(m, pData.y));
+}
+function renderP() {
+  clampP();
+  pImg.style.transform = 'translate(' + pData.x + '%, ' + pData.y + '%) scale(' + pData.s + ')';
+  pZoomVal.textContent = Math.round(pData.s * 100) + '%';
+}
+
+// ドラッグ移動+2本指ピンチ
+const pts = new Map();
+let lastDist = 0;
+pView.addEventListener('pointerdown', e => {
+  pView.setPointerCapture(e.pointerId);
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  lastDist = 0;
+});
+pView.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId) || !pData) return;
+  const prev = pts.get(e.pointerId);
+  const cur = { x: e.clientX, y: e.clientY };
+  pts.set(e.pointerId, cur);
+  if (pts.size === 1) {
+    pData.x += (cur.x - prev.x) / pView.clientWidth * 100;
+    pData.y += (cur.y - prev.y) / pView.clientHeight * 100;
+    renderP();
+  } else if (pts.size === 2) {
+    const a = [...pts.values()];
+    const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+    if (lastDist) {
+      pData.s = Math.max(1, Math.min(3, pData.s * d / lastDist));
+      pZoom.value = Math.round(pData.s * 100);
+      renderP();
+    }
+    lastDist = d;
+  }
+});
+['pointerup', 'pointercancel'].forEach(t => pView.addEventListener(t, e => { pts.delete(e.pointerId); lastDist = 0; }));
+pView.addEventListener('wheel', e => {
+  if (!pData) return;
+  e.preventDefault();
+  pData.s = Math.max(1, Math.min(3, pData.s * (e.deltaY < 0 ? 1.06 : 0.94)));
+  pZoom.value = Math.round(pData.s * 100);
+  renderP();
+}, { passive: false });
+
+pZoom.addEventListener('input', () => { if (pData) { pData.s = pZoom.value / 100; renderP(); } });
+$('__pchange').addEventListener('click', () => { changeInModal = true; input.click(); });
+$('__pcancel').addEventListener('click', () => { pModal.classList.remove('show'); pData = null; });
+$('__pok').addEventListener('click', () => {
+  if (target && pData) { applyPhoto(target, pData); saveState(); }
+  pModal.classList.remove('show'); pData = null;
+});
+
+// ── 文字モーダル(本文+サイズ) ──────────────────────────────
+const tModal = $('__tmodal'), tArea = $('__tarea');
+const tSize = $('__tsize'), tSizeVal = $('__tsizeval');
+let tTarget = null, tOrig = null;
+
+editables.forEach(el => el.addEventListener('click', e => {
+  e.stopPropagation();
+  openTextModal(el);
+}));
+
+function openTextModal(el) {
+  tTarget = el;
+  tOrig = { html: el.innerHTML, fs: el.style.fontSize };
+  tArea.value = el.innerText;
+  const base = +el.dataset.basefs || 16;
+  const cur = parseFloat(el.style.fontSize) || base;
+  tSize.value = Math.round(cur / base * 100);
+  tSizeVal.textContent = tSize.value + '%';
+  tModal.classList.add('show');
+}
+
+tSize.addEventListener('input', () => {
+  if (!tTarget) return;
+  const base = +tTarget.dataset.basefs || 16;
+  tTarget.style.fontSize = (base * tSize.value / 100).toFixed(1) + 'px';
+  tSizeVal.textContent = tSize.value + '%';
+});
+
+$('__tcancel').addEventListener('click', () => {
+  if (tTarget && tOrig) { tTarget.innerHTML = tOrig.html; tTarget.style.fontSize = tOrig.fs; }
+  tModal.classList.remove('show'); tTarget = null;
+});
+$('__tok').addEventListener('click', () => {
+  if (tTarget) {
+    tTarget.textContent = '';
+    tArea.value.split('\\n').forEach((ln, i) => {
+      if (i) tTarget.appendChild(document.createElement('br'));
+      tTarget.appendChild(document.createTextNode(ln));
+    });
+    saveState();
+  }
+  tModal.classList.remove('show'); tTarget = null;
 });
 <\/script>
 </body>

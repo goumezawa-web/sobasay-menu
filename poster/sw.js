@@ -1,4 +1,4 @@
-const POSTER_VERSION = '1.0.0';
+const POSTER_VERSION = '1.1.0';
 const CACHE = 'poster-ai-v' + POSTER_VERSION;
 const ASSETS = [
   './index.html',
