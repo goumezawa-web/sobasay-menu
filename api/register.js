@@ -91,7 +91,9 @@ module.exports = async (req, res) => {
       metafields: [
         { namespace: 'custom', key: 'volume', type: 'single_line_text_field', value: item.volume || '' },
         { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: item.region || '' },
-        { namespace: 'custom', key: 'spec', type: 'multi_line_text_field', value: item.spec || '' }
+        { namespace: 'custom', key: 'spec', type: 'multi_line_text_field', value: item.spec || '' },
+        { namespace: 'custom', key: 'img_pos', type: 'single_line_text_field',
+          value: (item.pos && (item.pos.s !== 1 || item.pos.x || item.pos.y)) ? `${item.pos.s},${item.pos.x},${item.pos.y}` : '' }
       ].filter(m => m.value),
       productOptions: [{ name: 'Title', values: [{ name: 'Default Title' }] }],
       variants: [{

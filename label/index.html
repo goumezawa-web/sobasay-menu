@@ -37,6 +37,17 @@
   .foot { font-size:11px; color:var(--sub); line-height:1.9; margin-top:10px; }
   details.keybox summary { font-size:12px; color:var(--sub); cursor:pointer; letter-spacing:.08em; }
   details.keybox .in { margin-top:10px; }
+  .item .ph { position:relative; cursor:pointer; }
+  .item .ph::after { content:'調整'; position:absolute; right:4px; bottom:4px; font-size:9px; letter-spacing:.1em; color:var(--gold); background:rgba(0,0,0,.6); padding:2px 6px; border-radius:3px; }
+  .pmodal { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.8); display:none; align-items:center; justify-content:center; }
+  .pmodal.show { display:flex; }
+  .pmodal .box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; width:min(320px, 92vw); }
+  .pmodal .frame { width:110px; aspect-ratio:10/26; margin:0 auto; overflow:hidden; border:1px solid var(--gold); border-radius:4px; background:#000; touch-action:none; }
+  .pmodal .frame img { width:100%; height:100%; object-fit:cover; will-change:transform; pointer-events:none; }
+  .pmodal .hint { text-align:center; font-size:11px; color:var(--sub); margin:10px 0 6px; }
+  .pmodal input[type=range] { width:100%; }
+  .pmodal .row { display:flex; gap:8px; margin-top:12px; }
+  .pmodal .row .btn { flex:1; }
 </style>
 </head>
 <body>
@@ -75,6 +86,18 @@
     登録すると写真・SPEC・在庫つきでストアの棚に即反映されます(下書き時は管理画面のみ)。<br>
     <a href="#" id="dl" style="color:var(--gold);">CSVでダウンロードしたい場合はこちら</a>
   </p>
+</div>
+
+<div class="pmodal" id="pmodal">
+  <div class="box">
+    <div class="frame" id="pm-frame"><img id="pm-img" alt=""></div>
+    <p class="hint">ドラッグで位置 / スライダーで大きさ(棚での見え方)</p>
+    <input type="range" id="pm-zoom" min="100" max="300" value="100">
+    <div class="row">
+      <button class="btn line" id="pm-reset">リセット</button>
+      <button class="btn" id="pm-ok">決定</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -130,7 +153,7 @@ async function handleFiles(files) {
         img: await resize(imgs[i], 400),
         b64,
         data,
-        price: '', sku: '', qty: '10', done: false,
+        price: '', sku: '', qty: '10', done: false, pos: { s: 1, x: 0, y: 0 },
         tags: { new: true, cold: !!data.cold, sub: false }
       });
       render();
@@ -186,6 +209,7 @@ async function registerItem(i) {
         price: it.price, sku: it.sku, qty: it.qty,
         tag_new: it.tags.new, tag_cold: it.tags.cold, tag_sub: it.tags.sub,
         draft: document.getElementById('asdraft').checked,
+        pos: it.pos,
         image: it.b64
       }
     })
@@ -250,8 +274,55 @@ $list.addEventListener('input', e => {
 
 $list.addEventListener('click', e => {
   const rm = e.target.closest('[data-rm]');
-  if (rm) { items.splice(+rm.dataset.rm, 1); render(); }
+  if (rm) { items.splice(+rm.dataset.rm, 1); render(); return; }
+  const ph = e.target.closest('.ph');
+  if (ph) openAdjust(+ph.closest('[data-i]').dataset.i);
 });
+
+/* ── 写真調整(棚での見え方) ── */
+const pmodal = document.getElementById('pmodal');
+const pmImg = document.getElementById('pm-img');
+const pmZoom = document.getElementById('pm-zoom');
+let pmIdx = -1, pm = { s: 1, x: 0, y: 0 };
+
+function pmApply() {
+  const lim = (pm.s - 1) * 50;
+  pm.x = Math.max(-lim, Math.min(lim, pm.x));
+  pm.y = Math.max(-lim, Math.min(lim, pm.y));
+  pmImg.style.transform = `translate(${pm.x}%, ${pm.y}%) scale(${pm.s})`;
+}
+function openAdjust(i) {
+  pmIdx = i;
+  pm = { ...items[i].pos };
+  pmImg.src = 'data:image/jpeg;base64,' + items[i].b64;
+  pmZoom.value = Math.round(pm.s * 100);
+  pmApply();
+  pmodal.classList.add('show');
+}
+pmZoom.addEventListener('input', () => { pm.s = pmZoom.value / 100; pmApply(); });
+document.getElementById('pm-reset').addEventListener('click', () => { pm = { s: 1, x: 0, y: 0 }; pmZoom.value = 100; pmApply(); });
+document.getElementById('pm-ok').addEventListener('click', () => {
+  items[pmIdx].pos = { s: +pm.s.toFixed(2), x: +pm.x.toFixed(1), y: +pm.y.toFixed(1) };
+  pmodal.classList.remove('show');
+});
+pmodal.addEventListener('click', e => { if (e.target === pmodal) pmodal.classList.remove('show'); });
+(() => {
+  const frame = document.getElementById('pm-frame');
+  let drag = null;
+  frame.addEventListener('pointerdown', e => {
+    frame.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, px: pm.x, py: pm.y };
+  });
+  frame.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const r = frame.getBoundingClientRect();
+    pm.x = drag.px + (e.clientX - drag.x) / r.width * 100;
+    pm.y = drag.py + (e.clientY - drag.y) / r.height * 100;
+    pmApply();
+  });
+  frame.addEventListener('pointerup', () => { drag = null; });
+  frame.addEventListener('pointercancel', () => { drag = null; });
+})();
 
 document.getElementById('clear').addEventListener('click', () => {
   if (items.length && !confirm('入力内容を全て削除しますか?')) return;
