@@ -81,6 +81,12 @@
 'use strict';
 
 const KEY_STORE = 'sobasay_staff_pin';
+// 招待リンク(?pin=xxxx)で開くと自動保存 → 以後は入力不要
+const _qp = new URLSearchParams(location.search).get('pin');
+if (_qp) {
+  localStorage.setItem(KEY_STORE, _qp);
+  history.replaceState(null, '', location.pathname);
+}
 const $key = document.getElementById('key');
 $key.value = localStorage.getItem(KEY_STORE) || '';
 if (!$key.value) document.getElementById('keybox').open = true;
