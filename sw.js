@@ -8,6 +8,7 @@ const ASSETS = [
   './poster/manifest.json',
   './poster/icon.svg',
   './label/index.html',
+  './label/manifest.json',
   './manifest.json',
   './icons/icon.svg',
   './version.js'

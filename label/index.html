@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ラベル読取 → Shopify商品CSV</title>
+<meta name="theme-color" content="#0c0a08">
+<link rel="manifest" href="manifest.json">
+<title>DROP 商品登録</title>
 <style>
   :root { --bg:#0c0a08; --panel:#16120d; --line:rgba(240,236,227,.12); --gold:#c9a961; --tx:#f0ece3; --sub:rgba(240,236,227,.55); --red:#e04434; }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -39,16 +41,16 @@
 </head>
 <body>
 
-<h1>ラベル読取 → Shopify商品CSV</h1>
-<p class="lead">瓶の写真をドロップすると、AIがラベルを読んで商品情報の下書きを作ります。確認・修正して「CSVダウンロード」→ Shopify管理画面の「商品管理 → インポート」で一括登録。</p>
+<h1>DROP 商品登録</h1>
+<p class="lead">瓶の写真を選ぶと、AIがラベルを読んで商品情報を下書きします。価格と在庫数を入れて「ストアに登録」を押すだけ。</p>
 
 <div class="card">
   <details class="keybox" id="keybox">
-    <summary>APIキー設定(ポスター取込と共通)</summary>
+    <summary>スタッフPIN設定(最初に1回)</summary>
     <div class="in">
-      <label for="key">Anthropic APIキー</label>
-      <input id="key" type="password" placeholder="sk-ant-...">
-      <p class="foot">この端末のブラウザ内にのみ保存され、AnthropicのAPI以外へは送信されません。</p>
+      <label for="key">PIN</label>
+      <input id="key" type="password" placeholder="店長に確認してください" inputmode="numeric">
+      <p class="foot">この端末に保存されます。APIキー等の秘密情報はこの画面には一切ありません。</p>
     </div>
   </details>
 </div>
@@ -62,45 +64,27 @@
 <div id="list"></div>
 
 <div class="card" id="exportcard" style="display:none;">
+  <div class="tags" style="margin-bottom:10px;">
+    <label><input type="checkbox" id="asdraft"> 下書きとして登録(棚に出さない)</label>
+  </div>
   <div class="grid">
-    <button class="btn" id="dl">Shopify CSV をダウンロード</button>
+    <button class="btn" id="regall">ストアに登録</button>
     <button class="btn line" id="clear">全てクリア</button>
   </div>
   <p class="foot">
-    ※ CSVの商品は<b>下書き(draft)</b>で入ります。管理画面で写真を追加して「アクティブ」にすると棚に並びます。<br>
-    ※ 事前にメタフィールド定義(custom.volume / custom.region / custom.spec)を作成しておいてください(セットアップ手順書 2章)。<br>
-    ※ インポートでエラーになる場合は、管理画面で商品を1件エクスポートし、列名をそのCSVに合わせてください。
+    登録すると写真・SPEC・在庫つきでストアの棚に即反映されます(下書き時は管理画面のみ)。<br>
+    <a href="#" id="dl" style="color:var(--gold);">CSVでダウンロードしたい場合はこちら</a>
   </p>
 </div>
 
 <script>
 'use strict';
 
-const KEY_STORE = 'sobasay_anthropic_key';
+const KEY_STORE = 'sobasay_staff_pin';
 const $key = document.getElementById('key');
 $key.value = localStorage.getItem(KEY_STORE) || '';
 if (!$key.value) document.getElementById('keybox').open = true;
 $key.addEventListener('change', () => localStorage.setItem(KEY_STORE, $key.value.trim()));
-
-const SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    name:     { type: 'string', description: '商品名(銘柄名)。ラベルの主たる商品名' },
-    kura:     { type: 'string', description: '蔵元・醸造所・ワイナリー名。不明なら空文字' },
-    region:   { type: 'string', description: '産地(都道府県または国・地域)。不明なら空文字' },
-    category: { type: 'string', enum: ['焼酎', '日本酒', 'ビール', 'ワイン', 'その他'] },
-    volume:   { type: 'string', description: '容量。例: 720ml, 1800ml。不明なら空文字' },
-    type:     { type: 'string', description: '種別。例: 芋焼酎, 純米吟醸, IPA, 白ワイン' },
-    alc:      { type: 'string', description: 'アルコール度数。例: 25%。不明なら空文字' },
-    spec:     { type: 'string', description: 'SPEC欄用の要約。種別/原料/度数などを「 / 」区切りで' },
-    cold:     { type: 'boolean', description: '要冷蔵と思われる場合true(生酒・無濾過生原酒・要冷蔵表記など)' },
-    notes:    { type: 'string', description: '読み取りに自信がない箇所や補足。なければ空文字' }
-  },
-  required: ['name', 'kura', 'region', 'category', 'volume', 'type', 'alc', 'spec', 'cold', 'notes']
-};
-
-const SYSTEM = '酒販店の商品登録係。瓶ラベルの写真から商品情報を正確に読み取る。読めない項目は推測せず空文字にし、notesに書く。';
 
 const items = []; // {img(dataURL縮小), data(schema結果), price, sku, qty, tags:{new,cold,sub}}
 const $list = document.getElementById('list');
@@ -127,18 +111,20 @@ async function handleFiles(files) {
   if (!imgs.length) return;
   if (!$key.value.trim()) {
     document.getElementById('keybox').open = true;
-    setStatus('先にAPIキーを設定してください', true);
+    setStatus('先にPINを設定してください', true);
     return;
   }
   for (let i = 0; i < imgs.length; i++) {
     setStatus(`読取中… ${i + 1} / ${imgs.length}`);
     try {
       const dataUrl = await resize(imgs[i], 1200);
-      const data = await readLabel(dataUrl.split(',')[1]);
+      const b64 = dataUrl.split(',')[1];
+      const data = await readLabel(b64);
       items.push({
         img: await resize(imgs[i], 400),
+        b64,
         data,
-        price: '', sku: '', qty: '10',
+        price: '', sku: '', qty: '10', done: false,
         tags: { new: true, cold: !!data.cold, sub: false }
       });
       render();
@@ -169,41 +155,39 @@ function resize(file, max) {
 }
 
 async function readLabel(b64) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/api/read', {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'anthropic-version': '2023-06-01',
-      'x-api-key': $key.value.trim(),
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: $key.value.trim(), image: b64 })
+  });
+  const out = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(out?.error || `HTTP ${res.status}`);
+  return out;
+}
+
+async function registerItem(i) {
+  const it = items[i];
+  if (!it.price || !it.data.name) throw new Error('商品名と価格を入れてください');
+  const res = await fetch('/api/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-opus-4-8',
-      max_tokens: 2000,
-      thinking: { type: 'adaptive' },
-      output_config: {
-        effort: 'medium',
-        format: { type: 'json_schema', schema: SCHEMA }
-      },
-      system: SYSTEM,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-          { type: 'text', text: 'このラベルを読み取って商品情報を抽出してください。' }
-        ]
-      }]
+      pin: $key.value.trim(),
+      item: {
+        name: it.data.name, kura: it.data.kura, region: it.data.region,
+        category: it.data.category, volume: it.data.volume, type: it.data.type,
+        spec: it.data.spec,
+        price: it.price, sku: it.sku, qty: it.qty,
+        tag_new: it.tags.new, tag_cold: it.tags.cold, tag_sub: it.tags.sub,
+        draft: document.getElementById('asdraft').checked,
+        image: it.b64
+      }
     })
   });
-  if (!res.ok) {
-    const e = await res.json().catch(() => null);
-    throw new Error(e?.error?.message || `HTTP ${res.status}`);
-  }
-  const msg = await res.json();
-  if (msg.stop_reason === 'refusal') throw new Error('読取が拒否されました。別の写真でお試しください');
-  const text = (msg.content || []).find(b => b.type === 'text')?.text;
-  if (!text) throw new Error('応答が空です');
-  return JSON.parse(text);
+  const out = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(out?.error || `HTTP ${res.status}`);
+  it.done = true;
+  return out;
 }
 
 function esc(s) {
@@ -215,7 +199,7 @@ function render() {
   <div class="card item" data-i="${i}">
     <div><div class="ph"><img src="${it.img}" alt=""></div></div>
     <div>
-      <button class="rm" data-rm="${i}">✕</button>
+      ${it.done ? '<span style="float:right;color:var(--gold);font-size:11px;letter-spacing:.1em;">✔ 登録済み</span>' : `<button class="rm" data-rm="${i}">✕</button>`}
       <div class="grid">
         <div class="w"><label>商品名</label><input data-f="name" value="${esc(it.data.name)}"></div>
         <div><label>蔵元(販売元)</label><input data-f="kura" value="${esc(it.data.kura)}"></div>
@@ -273,7 +257,30 @@ function csvCell(v) {
   return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
 
-document.getElementById('dl').addEventListener('click', () => {
+document.getElementById('regall').addEventListener('click', async () => {
+  const btn = document.getElementById('regall');
+  btn.disabled = true;
+  let okCount = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].done) { okCount++; continue; }
+    setStatus(`登録中… ${i + 1} / ${items.length}(${items[i].data.name})`);
+    try {
+      await registerItem(i);
+      okCount++;
+    } catch (err) {
+      setStatus(`「${items[i].data.name}」の登録失敗: ${err.message}`, true);
+      btn.disabled = false;
+      render();
+      return;
+    }
+  }
+  setStatus(`完了: ${okCount}件をストアに登録しました`);
+  btn.disabled = false;
+  render();
+});
+
+document.getElementById('dl').addEventListener('click', (ev) => {
+  if (ev) ev.preventDefault();
   const headers = [
     'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published',
     'Option1 Name', 'Option1 Value',
