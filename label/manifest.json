@@ -1,0 +1,12 @@
+{
+  "name": "DROP 商品登録",
+  "short_name": "DROP登録",
+  "start_url": "/label/",
+  "scope": "/label/",
+  "display": "standalone",
+  "background_color": "#0c0a08",
+  "theme_color": "#0c0a08",
+  "icons": [
+    { "src": "/poster/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

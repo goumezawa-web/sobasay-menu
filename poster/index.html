@@ -185,7 +185,7 @@ function loadImage(file) {
   reader.onload = ev => {
     const im = new Image();
     im.onload = () => {
-      const MAX = 2000;
+      const MAX = 1568;
       const r = Math.min(1, MAX / Math.max(im.width, im.height));
       const c = document.createElement('canvas');
       c.width = Math.round(im.width * r);
@@ -208,22 +208,349 @@ function updateRunState() {
   $run.disabled = !(imageBase64 && $key.value.trim());
 }
 
-// ── プロンプト ────────────────────────────────────────────────
-const SYSTEM_PROMPT = `あなたはポスター・メニューのデザインをHTMLとして復元する専門家です。
-渡された画像を解析し、次の仕様を満たす完全な単一HTMLドキュメントを生成してください。
+// ── プロンプト(共通のガワはアプリ側テンプレートが持つため、
+//    モデルにはポスター固有部分だけを出力させてトークンを節約) ──
+const SYSTEM_PROMPT = `ポスター画像をHTMLに復元する。出力は次の2ブロックのみ。説明文・コメント・コードフェンスは一切書かない。
 
-【必須仕様】
-1. 画像内の全テキストを読み取り、HTMLのテキスト要素として復元する。すべてのテキスト要素に contenteditable を付け、クリックでその場編集できるようにする
-2. 帯・図形・ロゴ・アイコン・装飾は画像から切り抜かず、CSSまたはインラインSVGのベクターとして再作図する
-3. 写真が入っている領域は data-photo 属性を持つ空のプレースホルダ枠にする。クリックすると <input type="file"> で端末の画像を選んで <img>(object-fit:cover)として配置できるJSを実装する
-4. 編集内容(全contenteditableのinnerHTMLと全写真のdataURL)をinputイベントのたびにlocalStorageへ保存し、ページ読込時に復元する自動保存を実装する。写真は保存前にcanvasで長辺1600pxへ縮小する
-5. ページは元ポスターの縦横比に合わせた用紙実寸(近い定型サイズがあればB5=182×257mmやA4=210×297mmを使う)でmm単位指定し、@page と @media print で余白なし原寸印刷に対応する
-6. 画面表示時はページ全体をウィンドウ幅に収める transform: scale() のフィットスケールを実装する
-7. 画面上部に印刷ボタン(window.print())を持つツールバー(printでは非表示)を付ける
-8. 配色は画像からスポイトした近似色を使い、フォントは日本語ゴシック系("Hiragino Sans","Yu Gothic","Noto Sans JP")を基本にレイアウトの印象を合わせる
+1. <style>ブロック
+- .page に用紙実寸を指定: 元画像の縦横比に近い定型(B5=182×257mm / A4=210×297mm、横型は縦横を逆に)で width/height をmm単位指定
+- @page { size: 幅mm 高さmm; margin: 0 } を含める
+- 配色は画像から読み取った近似色。フォント指定は不要(日本語ゴシックが既定)
+- 使わないスタイルは書かない
 
-【出力形式】
-説明文は一切書かず、<!doctype html> から始まる完全なHTMLドキュメントのみを出力する。コードフェンスも不要。`;
+2. <div class="page"> … </div>
+- 画像内の全テキストを読み取って復元し、全テキスト要素に contenteditable を付ける
+- ロゴ・帯・図形・アイコン等の装飾はCSSまたはインラインSVGで再作図(ラスター画像は使わない)
+- 写真の領域は中身が空の <div data-photo></div> にし、位置とサイズはCSSで指定
+
+編集用JS・ツールバー・印刷ボタン・フィットスケールはアプリ側で付与するため書かない。`;
+
+// ── 固定テンプレート(ガワ): 生成結果に毎回同じものを付与 ──────
+const SHELL_HEAD = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポスター</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #f3f3f3; font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif; }
+  .toolbar { position: sticky; top: 0; z-index: 50; background: #111; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; }
+  .toolbar button { background: #fff; color: #111; border: 0; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .toolbar .hint { font-size: 12px; color: #aaa; }
+  .stage { display: flex; justify-content: center; padding: 24px 16px 60px; }
+  .scaler { transform-origin: top center; transform: scale(var(--scale, 1)); }
+  .page { background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); position: relative; overflow: hidden; }
+  [contenteditable]:hover { outline: 1px dashed rgba(206,43,55,.5); }
+  [contenteditable]:focus { outline: 2px solid #CE2B37; }
+  [data-photo] { cursor: pointer; position: relative; overflow: hidden; background: rgba(0,0,0,.06); }
+  [data-photo]:empty::after { content: 'クリックで写真を配置'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10pt; color: rgba(0,0,0,.35); letter-spacing: .1em; }
+  [data-photo] img { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }
+  [contenteditable] { cursor: pointer; }
+
+  /* ── 編集モーダル(画面のみ) ── */
+  .__modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .__modal.show { display: flex; }
+  .__panel { background: #fff; border-radius: 14px; padding: 16px; width: min(92vw, 540px); max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+  .__panel h3 { font-size: 14px; margin-bottom: 10px; }
+  .__hint { font-size: 11px; color: #888; margin-top: 6px; }
+  .__viewport { position: relative; overflow: hidden; background: #e8e8e8; touch-action: none; margin: 0 auto; border-radius: 6px; }
+  .__viewport img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: center; user-select: none; -webkit-user-select: none; pointer-events: none; }
+  .__row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .__row label { font-size: 12px; color: #555; white-space: nowrap; }
+  .__row input[type=range] { flex: 1; }
+  .__row .__val { font-size: 12px; color: #555; width: 44px; text-align: right; }
+  .__btns { display: flex; gap: 8px; margin-top: 14px; }
+  .__btns button { flex: 1; padding: 11px 6px; border-radius: 8px; border: 1px solid #ccc; background: #f5f5f5; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .__btns .__pri { background: #111; color: #fff; border-color: #111; }
+  .__panel textarea { width: 100%; min-height: 90px; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; resize: vertical; }
+  @media print {
+    .__modal { display: none !important; }
+    .toolbar { display: none; }
+    .stage { padding: 0; }
+    .scaler { transform: none; }
+    .page { box-shadow: none; }
+    [data-photo]:empty::after { content: none; }
+    [contenteditable]:hover, [contenteditable]:focus { outline: none; }
+  }
+</style>
+`;
+
+const SHELL_MID = `</head>
+<body>
+<div class="toolbar">
+  <strong style="font-size:13px">ポスター編集</strong>
+  <button onclick="window.print()">🖨 印刷 / PDF</button>
+  <span class="hint">文字はクリックで編集、写真枠はクリックで差し替え</span>
+</div>
+<div class="stage"><div class="scaler">
+`;
+
+function shellTail(storeKey) {
+  return `
+</div></div>
+<input type="file" id="__photo_input" accept="image/*" style="display:none">
+
+<div class="__modal" id="__pmodal">
+  <div class="__panel">
+    <h3>&#128247; 写真の位置と大きさ</h3>
+    <div class="__viewport" id="__pview"><img id="__pimg" alt=""></div>
+    <div class="__row"><label>拡大縮小</label><input type="range" id="__pzoom" min="100" max="300" value="100"><span class="__val" id="__pzoomval">100%</span></div>
+    <p class="__hint">ドラッグで位置調整 / ピンチまたはスライダーで拡大縮小</p>
+    <div class="__btns">
+      <button id="__pchange">写真を変更</button>
+      <button id="__pcancel">キャンセル</button>
+      <button class="__pri" id="__pok">決定</button>
+    </div>
+  </div>
+</div>
+
+<div class="__modal" id="__tmodal">
+  <div class="__panel">
+    <h3>&#9999;&#65039; 文字の編集</h3>
+    <textarea id="__tarea"></textarea>
+    <div class="__row"><label>文字サイズ</label><input type="range" id="__tsize" min="50" max="300" value="100"><span class="__val" id="__tsizeval">100%</span></div>
+    <p class="__hint">サイズはスライダーを動かすと下のポスターに即時反映されます</p>
+    <div class="__btns">
+      <button id="__tcancel">キャンセル</button>
+      <button class="__pri" id="__tok">決定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const STORE_KEY = '` + storeKey + `';
+const editables = [...document.querySelectorAll('[contenteditable]')];
+const photos    = [...document.querySelectorAll('[data-photo]')];
+const $ = id => document.getElementById(id);
+
+function fitScale() {
+  const p = document.querySelector('.page');
+  if (!p) return;
+  const s = Math.min(1, (window.innerWidth - 32) / p.offsetWidth);
+  document.querySelector('.scaler').style.setProperty('--scale', s.toFixed(3));
+}
+window.addEventListener('resize', fitScale);
+fitScale();
+
+// ── 状態の保存/復元 ──────────────────────────────────────────
+function saveState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      texts: editables.map(el => ({ h: el.innerHTML, fs: el.style.fontSize || null })),
+      images: photos.map(el => {
+        const img = el.querySelector('img');
+        if (!img) return null;
+        return { src: img.src, s: +el.dataset.ps || 1, x: +el.dataset.px || 0, y: +el.dataset.py || 0 };
+      })
+    }));
+  } catch (e) {}
+}
+
+function applyPhoto(el, d) {
+  let img = el.querySelector('img');
+  if (!img) { img = document.createElement('img'); el.appendChild(img); }
+  img.src = d.src;
+  el.dataset.ps = d.s || 1; el.dataset.px = d.x || 0; el.dataset.py = d.y || 0;
+  img.style.transform = 'translate(' + (d.x || 0) + '%, ' + (d.y || 0) + '%) scale(' + (d.s || 1) + ')';
+}
+
+// 元の文字サイズを先に記録(復元やサイズ変更の基準値)
+editables.forEach(el => {
+  el.dataset.basefs = parseFloat(getComputedStyle(el).fontSize) || 16;
+  el.setAttribute('contenteditable', 'false');
+});
+
+(function restore() {
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    (d.texts || []).forEach((t, i) => {
+      const el = editables[i]; if (t == null || !el) return;
+      if (typeof t === 'string') { el.innerHTML = t; return; }
+      if (t.h != null) el.innerHTML = t.h;
+      if (t.fs) el.style.fontSize = t.fs;
+    });
+    (d.images || []).forEach((m, i) => {
+      const el = photos[i]; if (!m || !el) return;
+      if (typeof m === 'string') applyPhoto(el, { src: m, s: 1, x: 0, y: 0 });
+      else applyPhoto(el, m);
+    });
+  } catch (e) {}
+})();
+
+// ── 写真: 選択→縮小 ─────────────────────────────────────────
+const input = document.getElementById('__photo_input');
+let target = null;
+let changeInModal = false;
+
+function shrink(dataUrl, cb) {
+  const im = new Image();
+  im.onload = () => {
+    const MAX = 1600;
+    const r = Math.min(1, MAX / Math.max(im.width, im.height));
+    if (r >= 1) { cb(dataUrl); return; }
+    const c = document.createElement('canvas');
+    c.width = Math.round(im.width * r);
+    c.height = Math.round(im.height * r);
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    cb(c.toDataURL('image/jpeg', 0.85));
+  };
+  im.src = dataUrl;
+}
+
+input.addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f || !target) return;
+  const reader = new FileReader();
+  reader.onload = ev => shrink(ev.target.result, src => {
+    if (changeInModal) {           // モーダル内の「写真を変更」
+      pData = { src, s: 1, x: 0, y: 0 };
+      pImg.src = src; pZoom.value = 100; renderP();
+      changeInModal = false;
+    } else {                       // 新規配置 → 即適用してモーダルで調整
+      applyPhoto(target, { src, s: 1, x: 0, y: 0 });
+      saveState();
+      openPhotoModal(target);
+    }
+  });
+  reader.readAsDataURL(f);
+});
+
+photos.forEach(el => el.addEventListener('click', () => {
+  target = el;
+  if (el.querySelector('img')) openPhotoModal(el);
+  else input.click();
+}));
+
+// ── 写真モーダル(移動・拡大縮小) ────────────────────────────
+const pModal = $('__pmodal'), pView = $('__pview'), pImg = $('__pimg');
+const pZoom = $('__pzoom'), pZoomVal = $('__pzoomval');
+let pData = null;
+
+function openPhotoModal(el) {
+  target = el;
+  const img = el.querySelector('img');
+  if (!img) return;
+  pData = { src: img.src, s: +el.dataset.ps || 1, x: +el.dataset.px || 0, y: +el.dataset.py || 0 };
+  const r = el.getBoundingClientRect();
+  const maxW = Math.min(window.innerWidth * 0.84, 480);
+  const maxH = window.innerHeight * 0.42;
+  let w = maxW, h = w * r.height / r.width;
+  if (h > maxH) { h = maxH; w = h * r.width / r.height; }
+  pView.style.width = w + 'px'; pView.style.height = h + 'px';
+  pImg.src = pData.src;
+  pZoom.value = Math.round(pData.s * 100);
+  renderP();
+  pModal.classList.add('show');
+}
+
+function clampP() {
+  const m = (pData.s - 1) * 50;
+  pData.x = Math.max(-m, Math.min(m, pData.x));
+  pData.y = Math.max(-m, Math.min(m, pData.y));
+}
+function renderP() {
+  clampP();
+  pImg.style.transform = 'translate(' + pData.x + '%, ' + pData.y + '%) scale(' + pData.s + ')';
+  pZoomVal.textContent = Math.round(pData.s * 100) + '%';
+}
+
+// ドラッグ移動+2本指ピンチ
+const pts = new Map();
+let lastDist = 0;
+pView.addEventListener('pointerdown', e => {
+  pView.setPointerCapture(e.pointerId);
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  lastDist = 0;
+});
+pView.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId) || !pData) return;
+  const prev = pts.get(e.pointerId);
+  const cur = { x: e.clientX, y: e.clientY };
+  pts.set(e.pointerId, cur);
+  if (pts.size === 1) {
+    pData.x += (cur.x - prev.x) / pView.clientWidth * 100;
+    pData.y += (cur.y - prev.y) / pView.clientHeight * 100;
+    renderP();
+  } else if (pts.size === 2) {
+    const a = [...pts.values()];
+    const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+    if (lastDist) {
+      pData.s = Math.max(1, Math.min(3, pData.s * d / lastDist));
+      pZoom.value = Math.round(pData.s * 100);
+      renderP();
+    }
+    lastDist = d;
+  }
+});
+['pointerup', 'pointercancel'].forEach(t => pView.addEventListener(t, e => { pts.delete(e.pointerId); lastDist = 0; }));
+pView.addEventListener('wheel', e => {
+  if (!pData) return;
+  e.preventDefault();
+  pData.s = Math.max(1, Math.min(3, pData.s * (e.deltaY < 0 ? 1.06 : 0.94)));
+  pZoom.value = Math.round(pData.s * 100);
+  renderP();
+}, { passive: false });
+
+pZoom.addEventListener('input', () => { if (pData) { pData.s = pZoom.value / 100; renderP(); } });
+$('__pchange').addEventListener('click', () => { changeInModal = true; input.click(); });
+$('__pcancel').addEventListener('click', () => { pModal.classList.remove('show'); pData = null; });
+$('__pok').addEventListener('click', () => {
+  if (target && pData) { applyPhoto(target, pData); saveState(); }
+  pModal.classList.remove('show'); pData = null;
+});
+
+// ── 文字モーダル(本文+サイズ) ──────────────────────────────
+const tModal = $('__tmodal'), tArea = $('__tarea');
+const tSize = $('__tsize'), tSizeVal = $('__tsizeval');
+let tTarget = null, tOrig = null;
+
+editables.forEach(el => el.addEventListener('click', e => {
+  e.stopPropagation();
+  openTextModal(el);
+}));
+
+function openTextModal(el) {
+  tTarget = el;
+  tOrig = { html: el.innerHTML, fs: el.style.fontSize };
+  tArea.value = el.innerText;
+  const base = +el.dataset.basefs || 16;
+  const cur = parseFloat(el.style.fontSize) || base;
+  tSize.value = Math.round(cur / base * 100);
+  tSizeVal.textContent = tSize.value + '%';
+  tModal.classList.add('show');
+}
+
+tSize.addEventListener('input', () => {
+  if (!tTarget) return;
+  const base = +tTarget.dataset.basefs || 16;
+  tTarget.style.fontSize = (base * tSize.value / 100).toFixed(1) + 'px';
+  tSizeVal.textContent = tSize.value + '%';
+});
+
+$('__tcancel').addEventListener('click', () => {
+  if (tTarget && tOrig) { tTarget.innerHTML = tOrig.html; tTarget.style.fontSize = tOrig.fs; }
+  tModal.classList.remove('show'); tTarget = null;
+});
+$('__tok').addEventListener('click', () => {
+  if (tTarget) {
+    tTarget.textContent = '';
+    tArea.value.split('\\n').forEach((ln, i) => {
+      if (i) tTarget.appendChild(document.createElement('br'));
+      tTarget.appendChild(document.createTextNode(ln));
+    });
+    saveState();
+  }
+  tModal.classList.remove('show'); tTarget = null;
+});
+<\/script>
+</body>
+</html>`;
+}
 
 // ── 生成実行(ストリーミング) ─────────────────────────────────
 $run.addEventListener('click', async () => {
@@ -242,9 +569,10 @@ $run.addEventListener('click', async () => {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-8',
-        max_tokens: 32000,
+        max_tokens: 16000,
         stream: true,
         thinking: { type: 'adaptive' },
+        output_config: { effort: 'medium' },
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
@@ -292,7 +620,7 @@ $run.addEventListener('click', async () => {
       throw new Error('出力が長すぎて途中で切れました。もう一度試すか、画像を単純なものにしてください。');
     }
 
-    generatedHtml = extractHtml(text);
+    generatedHtml = composePoster(text);
     if (!generatedHtml) throw new Error('HTMLを抽出できませんでした。もう一度試してください。');
 
     $preview.srcdoc = generatedHtml;
@@ -306,16 +634,28 @@ $run.addEventListener('click', async () => {
   }
 });
 
-function extractHtml(text) {
-  const fence = text.match(/```html\s*([\s\S]*?)```/i);
-  if (fence) return fence[1].trim();
+function composePoster(text) {
+  // コードフェンスが混ざっていたら除去
+  text = text.replace(/```(html)?/gi, '').trim();
+
+  // 万一フルHTMLで返ってきた場合はそのまま使う
   const lower = text.toLowerCase();
-  const start = lower.indexOf('<!doctype html');
-  if (start >= 0) {
+  const docStart = lower.indexOf('<!doctype html');
+  if (docStart >= 0) {
     const end = lower.lastIndexOf('</html>');
-    return end > start ? text.slice(start, end + 7) : text.slice(start);
+    return end > docStart ? text.slice(docStart, end + 7) : text.slice(docStart);
   }
-  return null;
+
+  // 通常パス: <style> と <div class="page"> を固定テンプレートに合成
+  const styleM = text.match(/<style[\s\S]*?<\/style>/i);
+  const pageStart = text.search(/<div class="page"/i);
+  if (!styleM || pageStart < 0) return null;
+  const pageEnd = text.lastIndexOf('</div>');
+  if (pageEnd < pageStart) return null;
+  const pageHtml = text.slice(pageStart, pageEnd + 6);
+
+  const storeKey = 'poster_state_' + Date.now().toString(36);
+  return SHELL_HEAD + styleM[0] + SHELL_MID + pageHtml + shellTail(storeKey);
 }
 
 function setStatus(msg, isErr) {
